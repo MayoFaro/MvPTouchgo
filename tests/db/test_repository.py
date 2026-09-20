@@ -1,6 +1,22 @@
 from src.collectors.base import RawItem
+from src.collectors.sources_config import SourceConfig
 from src.db.models import NewsItem, NewsSource
-from src.db.repository import save_raw_items, update_source_run_status
+from src.db.repository import save_raw_items, sync_sources, update_source_run_status
+
+
+def _source_config(source_id: str = "flightglobal", **overrides) -> SourceConfig:
+    base = dict(
+        id=source_id,
+        name="FlightGlobal",
+        type="rss",
+        url="https://example.com/feed",
+        language="en",
+        source_type="press",
+        poll_interval_minutes=30,
+        active=True,
+    )
+    base.update(overrides)
+    return SourceConfig(**base)
 
 
 def _raw_item(source_item_id: str) -> RawItem:
@@ -33,6 +49,74 @@ def test_save_raw_items_skips_existing_duplicates(db_session, make_source):
     assert result.inserted == 1
     assert result.skipped_duplicates == 1
     assert db_session.query(NewsItem).count() == 2
+
+
+def test_save_raw_items_skips_in_batch_duplicates(db_session, make_source):
+    """Two entries sharing a source_item_id in one batch must not abort the commit."""
+    make_source(source_id="flightglobal")
+
+    result = save_raw_items(
+        db_session, "flightglobal", [_raw_item(""), _raw_item(""), _raw_item("2")]
+    )
+
+    assert result.inserted == 2
+    assert result.skipped_duplicates == 1
+    assert db_session.query(NewsItem).count() == 2
+
+
+def test_sync_sources_creates_missing_source(db_session):
+    sync_sources(db_session, [_source_config("opex360", name="Opex360", language="fr")])
+
+    source = db_session.get(NewsSource, "opex360")
+    assert source is not None
+    assert source.name == "Opex360"
+    assert source.url == "https://example.com/feed"
+    assert source.source_type == "press"
+    assert source.language == "fr"
+    assert source.active is True
+    assert source.confirmation_level is None
+    assert source.detection_value is None
+    assert source.config is None
+
+
+def test_sync_sources_updates_existing_source(db_session):
+    sync_sources(db_session, [_source_config("opex360", name="Opex360", language="fr")])
+
+    sync_sources(
+        db_session,
+        [
+            _source_config(
+                "opex360",
+                name="Opex360 (renamed)",
+                url="https://opex360.example/feed",
+                language="en",
+                source_type="media",
+                active=False,
+            )
+        ],
+    )
+
+    source = db_session.get(NewsSource, "opex360")
+    assert source.name == "Opex360 (renamed)"
+    assert source.url == "https://opex360.example/feed"
+    assert source.language == "en"
+    assert source.source_type == "media"
+    assert source.active is False
+    assert db_session.query(NewsSource).count() == 1
+
+
+def test_sync_sources_preserves_run_status_columns(db_session, make_source):
+    make_source(source_id="flightglobal")
+    update_source_run_status(db_session, "flightglobal", status="FAILED", error="timeout")
+    before = db_session.get(NewsSource, "flightglobal").last_run_at
+
+    sync_sources(db_session, [_source_config("flightglobal", name="Renamed")])
+
+    source = db_session.get(NewsSource, "flightglobal")
+    assert source.name == "Renamed"
+    assert source.last_run_status == "FAILED"
+    assert source.last_run_error == "timeout"
+    assert source.last_run_at == before
 
 
 def test_update_source_run_status_records_success(db_session, make_source):

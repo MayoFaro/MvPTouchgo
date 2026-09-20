@@ -9,6 +9,7 @@ from src.api.schemas import NewsItemOut
 from src.collectors.sources_config import load_sources_config
 from src.config import get_settings
 from src.db.models import NewsItem
+from src.db.repository import sync_sources
 from src.db.session import SessionLocal, get_session
 from src.scheduler import build_scheduler
 
@@ -17,6 +18,11 @@ from src.scheduler import build_scheduler
 async def lifespan(app: FastAPI):
     settings = get_settings()
     sources = load_sources_config(settings.sources_config_path)
+    sync_session = SessionLocal()
+    try:
+        sync_sources(sync_session, sources)
+    finally:
+        sync_session.close()
     scheduler = build_scheduler(sources, SessionLocal)
     scheduler.start()
     app.state.scheduler = scheduler

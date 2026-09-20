@@ -34,5 +34,10 @@ async def run_collection(
         )
     except Exception as exc:  # noqa: BLE001 - a single source must never break the others
         logger.exception("Collection failed for source %s", source_config.id)
-        update_source_run_status(session, source_config.id, status="FAILED", error=str(exc))
+        try:
+            update_source_run_status(session, source_config.id, status="FAILED", error=str(exc))
+        except Exception as status_exc:  # noqa: BLE001 - status recording must not break isolation
+            logger.exception(
+                "Failed to record run status for source %s after collection failure", source_config.id
+            )
         return CollectionResult(source_id=source_config.id, ok=False, error=str(exc))

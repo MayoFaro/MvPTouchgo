@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import patch
 
 from src.collectors.base import Collector, RawItem
 from src.collectors.runner import run_collection
@@ -69,3 +70,26 @@ async def test_run_collection_isolates_collector_failure(db_session, make_source
     assert db_session.query(NewsItem).count() == 0
     source = db_session.get(NewsSource, "s1")
     assert source.last_run_status == "FAILED"
+
+
+@pytest.mark.asyncio
+async def test_run_collection_isolates_status_update_failure(db_session, make_source):
+    """Test that a failure in update_source_run_status doesn't propagate out of run_collection."""
+    make_source(source_id="s1")
+    config = _config()
+
+    # Simulate a scenario where update_source_run_status fails (e.g., session in broken state)
+    with patch("src.collectors.runner.update_source_run_status") as mock_update_status:
+        # First call (in success path) succeeds, subsequent calls (in error path) fail
+        mock_update_status.side_effect = [
+            None,  # Success path would use this (not reached in this test)
+            RuntimeError("Session is broken"),  # Failure path hits this
+        ]
+
+        result = await run_collection(db_session, config, _FailingCollector(source_id="s1"))
+
+    # The important assertion: even though update_source_run_status raised,
+    # run_collection still returns a proper CollectionResult instead of propagating
+    assert result.ok is False
+    assert "timed out" in result.error
+    assert result.source_id == "s1"

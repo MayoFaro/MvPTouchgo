@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Sample Feed</title>
+    <item>
+      <title>First article</title>
+      <link>https://example.com/articles/1</link>
+      <guid>https://example.com/articles/1</guid>
+      <description>Summary of the first article.</description>
+      <author>jane@example.com</author>
+      <pubDate>Mon, 01 Jan 2026 10:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Second article</title>
+      <link>https://example.com/articles/2</link>
+      <guid>https://example.com/articles/2</guid>
+      <description>Summary of the second article.</description>
+      <pubDate>Tue, 02 Jan 2026 08:30:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

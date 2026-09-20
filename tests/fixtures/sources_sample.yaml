@@ -1,0 +1,9 @@
+sources:
+  - id: example
+    name: Example Feed
+    type: rss
+    url: https://example.com/feed
+    language: en
+    source_type: press
+    poll_interval_minutes: 30
+    active: true

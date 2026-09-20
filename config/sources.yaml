@@ -1,0 +1,54 @@
+sources:
+  - id: flightglobal
+    name: FlightGlobal
+    type: rss
+    url: https://www.flightglobal.com/rss
+    language: en
+    source_type: press
+    poll_interval_minutes: 30
+    active: true
+
+  - id: airbus
+    name: Airbus Newsroom
+    type: rss
+    url: https://www.airbus.com/en/rss.xml
+    language: en
+    source_type: official
+    poll_interval_minutes: 30
+    active: true
+
+  - id: opex360
+    name: Opex360
+    type: rss
+    url: https://www.opex360.com/feed/
+    language: fr
+    source_type: press
+    poll_interval_minutes: 20
+    active: true
+
+  - id: bmpd
+    name: BMPD
+    type: rss
+    url: https://bmpd.livejournal.com/data/rss
+    language: ru
+    source_type: media
+    poll_interval_minutes: 30
+    active: true
+
+  - id: tass
+    name: TASS
+    type: rss
+    url: https://tass.com/rss/v2.xml
+    language: en
+    source_type: official
+    poll_interval_minutes: 30
+    active: true
+
+  - id: pprune_military
+    name: "PPRuNe - Military Aviation"
+    type: forum_pprune
+    url: https://www.pprune.org/military-aviation/
+    language: en
+    source_type: community
+    poll_interval_minutes: 60
+    active: true

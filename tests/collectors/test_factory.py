@@ -27,6 +27,11 @@ def test_build_collector_rss():
     assert collector.feed_url == "https://example.com/feed"
 
 
+def test_build_collector_rss_passes_configured_language():
+    collector = build_collector(_config(type="rss", language="ru"))
+    assert collector.default_language == "ru"
+
+
 def test_build_collector_forum_pprune():
     collector = build_collector(_config(type="forum_pprune"))
     assert isinstance(collector, PPRuneForumCollector)

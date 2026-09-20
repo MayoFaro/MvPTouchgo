@@ -1,6 +1,8 @@
 import pytest
 from unittest.mock import patch
 
+from sqlalchemy import text
+
 from src.collectors.base import Collector, RawItem
 from src.collectors.runner import run_collection
 from src.collectors.sources_config import SourceConfig
@@ -31,6 +33,25 @@ class _WorkingCollector(Collector):
                 language="en",
             )
         ]
+
+
+class _AbortingTransactionCollector(Collector):
+    """Provokes a real DB-level failure that leaves the transaction in aborted state."""
+
+    def __init__(self, source_id: str, session):
+        super().__init__(source_id)
+        self._session = session
+
+    async def fetch(self) -> list[RawItem]:
+        self._session.execute(
+            text(
+                "INSERT INTO news_item "
+                "(source_id, source_item_id, canonical_url, original_url, original_title,"
+                " original_text, detected_at, status) "
+                "VALUES ('does-not-exist', 'x', 'u', 'u', 't', 'b', now(), 'NEW')"
+            )
+        )
+        return []
 
 
 class _FailingCollector(Collector):
@@ -70,6 +91,26 @@ async def test_run_collection_isolates_collector_failure(db_session, make_source
     assert db_session.query(NewsItem).count() == 0
     source = db_session.get(NewsSource, "s1")
     assert source.last_run_status == "FAILED"
+
+
+@pytest.mark.asyncio
+async def test_run_collection_rolls_back_aborted_transaction_before_recording_status(
+    db_session, make_source
+):
+    """A DB-level failure must be rolled back so the FAILED status can still be written."""
+    make_source(source_id="s1")
+    config = _config()
+
+    result = await run_collection(
+        db_session, config, _AbortingTransactionCollector(source_id="s1", session=db_session)
+    )
+
+    assert result.ok is False
+    source = db_session.get(NewsSource, "s1")
+    assert source.last_run_status == "FAILED"
+    # Read it back from the database, not just from the identity map.
+    db_session.expire_all()
+    assert db_session.get(NewsSource, "s1").last_run_status == "FAILED"
 
 
 @pytest.mark.asyncio

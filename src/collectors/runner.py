@@ -33,6 +33,9 @@ async def run_collection(
             skipped_duplicates=result.skipped_duplicates,
         )
     except Exception as exc:  # noqa: BLE001 - a single source must never break the others
+        # A DB-originated failure leaves the session in "rollback required" state:
+        # roll back first, otherwise the status update below cannot succeed.
+        session.rollback()
         logger.exception("Collection failed for source %s", source_config.id)
         try:
             update_source_run_status(session, source_config.id, status="FAILED", error=str(exc))

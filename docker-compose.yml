@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: touchgo
+      POSTGRES_PASSWORD: touchgo
+      POSTGRES_DB: touchgo_news
+    ports:
+      - "5432:5432"
+    volumes:
+      - touchgo_news_pgdata:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d
+
+volumes:
+  touchgo_news_pgdata:

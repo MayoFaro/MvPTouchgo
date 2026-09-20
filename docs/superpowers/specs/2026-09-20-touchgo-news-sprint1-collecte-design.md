@@ -2,7 +2,7 @@
 
 Statut : validé par l'utilisateur en conversation, prêt pour plan d'implémentation.
 
-Référence fonctionnelle complète : [`TouchGo-News-SPEC.md`](../../../TouchGo-News-SPEC.md) (sections 25-27, 34).
+Référence fonctionnelle complète : [`SPEC.md`](../../../SPEC.md) (sections 25-27, 34).
 
 ## 1. Contexte et portée
 

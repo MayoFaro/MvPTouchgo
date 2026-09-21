@@ -2,6 +2,7 @@ from src.collectors.base import RawItem
 from src.collectors.sources_config import SourceConfig
 from src.db.models import NewsItem, NewsSource
 from src.db.repository import save_raw_items, sync_sources, update_source_run_status
+from src.normalization.text import compute_content_hash
 
 
 def _source_config(source_id: str = "flightglobal", **overrides) -> SourceConfig:
@@ -138,3 +139,37 @@ def test_update_source_run_status_records_failure(db_session, make_source):
     source = db_session.get(NewsSource, "flightglobal")
     assert source.last_run_status == "FAILED"
     assert source.last_run_error == "timeout"
+
+
+def test_save_raw_items_canonicalizes_the_url(db_session, make_source):
+    make_source(source_id="flightglobal")
+    item = RawItem(
+        source_item_id="1",
+        canonical_url="https://example.com/a",
+        original_url="https://Example.com/a?utm_source=newsletter",
+        original_title="Title",
+        original_text="Body",
+        language="en",
+    )
+
+    save_raw_items(db_session, "flightglobal", [item])
+
+    stored = db_session.query(NewsItem).filter_by(source_item_id="1").one()
+    assert stored.canonical_url == "https://example.com/a"
+
+
+def test_save_raw_items_computes_content_hash(db_session, make_source):
+    make_source(source_id="flightglobal")
+    item = RawItem(
+        source_item_id="1",
+        canonical_url="https://example.com/a",
+        original_url="https://example.com/a",
+        original_title="Some Title",
+        original_text="Some body text",
+        language="en",
+    )
+
+    save_raw_items(db_session, "flightglobal", [item])
+
+    stored = db_session.query(NewsItem).filter_by(source_item_id="1").one()
+    assert stored.content_hash == compute_content_hash("Some Title", "Some body text")

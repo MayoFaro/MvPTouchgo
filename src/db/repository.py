@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from src.collectors.base import RawItem
 from src.collectors.sources_config import SourceConfig
 from src.db.models import NewsItem, NewsSource
+from src.normalization.text import compute_content_hash
+from src.normalization.url import canonicalize_url
 
 
 @dataclass
@@ -65,11 +67,13 @@ def save_raw_items(session: Session, source_id: str, items: list[RawItem]) -> Sa
             skipped += 1
             continue
         seen_in_batch.add(key)
+        canonical_url = canonicalize_url(item.original_url)
+        content_hash = compute_content_hash(item.original_title, item.original_text)
         session.add(
             NewsItem(
                 source_id=source_id,
                 source_item_id=item.source_item_id,
-                canonical_url=item.canonical_url,
+                canonical_url=canonical_url,
                 original_url=item.original_url,
                 original_title=item.original_title,
                 original_text=item.original_text,
@@ -77,6 +81,7 @@ def save_raw_items(session: Session, source_id: str, items: list[RawItem]) -> Sa
                 author=item.author,
                 published_at=item.published_at,
                 status="NEW",
+                content_hash=content_hash,
             )
         )
         inserted += 1

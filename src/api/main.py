@@ -11,7 +11,7 @@ from src.config import get_settings
 from src.db.models import NewsItem
 from src.db.repository import sync_sources
 from src.db.session import SessionLocal, get_session
-from src.scheduler import build_scheduler
+from src.scheduler import add_classification_job, build_scheduler
 
 
 @asynccontextmanager
@@ -24,6 +24,12 @@ async def lifespan(app: FastAPI):
     finally:
         sync_session.close()
     scheduler = build_scheduler(sources, SessionLocal)
+    add_classification_job(
+        scheduler,
+        SessionLocal,
+        batch_size=settings.classification_batch_size,
+        interval_minutes=settings.classification_interval_minutes,
+    )
     scheduler.start()
     app.state.scheduler = scheduler
     yield

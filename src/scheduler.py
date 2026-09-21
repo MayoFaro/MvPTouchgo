@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from src.classification.job import classify_pending_items
 from src.collectors.factory import build_collector
 from src.collectors.runner import run_collection
 from src.collectors.sources_config import SourceConfig
@@ -42,5 +43,32 @@ async def _run_source_job(source: SourceConfig, session_factory) -> None:
             update_source_run_status(session, source.id, status="FAILED", error=str(exc))
         except Exception:  # noqa: BLE001 - status recording must not break isolation
             logger.exception("Failed to record run status for source %s", source.id)
+    finally:
+        session.close()
+
+
+def add_classification_job(
+    scheduler: AsyncIOScheduler,
+    session_factory,
+    batch_size: int,
+    interval_minutes: int,
+) -> None:
+    scheduler.add_job(
+        _classify_job,
+        "interval",
+        minutes=interval_minutes,
+        id="classification",
+        args=[session_factory, batch_size],
+        # Fire once right away instead of waiting a full poll interval.
+        next_run_time=datetime.now(timezone.utc),
+    )
+
+
+async def _classify_job(session_factory, batch_size: int) -> None:
+    session = session_factory()
+    try:
+        await classify_pending_items(session, batch_size)
+    except Exception:  # noqa: BLE001 - the classification job must never crash the scheduler
+        logger.exception("Classification job failed")
     finally:
         session.close()

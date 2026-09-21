@@ -5,9 +5,12 @@ import httpx
 import pytest
 import respx
 
+import src.classification.job as job_module
+import src.scheduler as scheduler_module
+from src.classification.client import ClassificationResult
 from src.collectors.sources_config import SourceConfig
 from src.db.models import NewsItem, NewsSource
-from src.scheduler import _run_source_job, build_scheduler
+from src.scheduler import _classify_job, _run_source_job, add_classification_job, build_scheduler
 
 FEED = (Path(__file__).parent / "fixtures" / "sample_feed.xml").read_text()
 
@@ -77,3 +80,58 @@ async def test_run_source_job_isolates_unknown_collector_type(db_session, make_s
     source = db_session.get(NewsSource, "a")
     assert source.last_run_status == "FAILED"
     assert "Unknown collector type" in source.last_run_error
+
+
+def test_add_classification_job_registers_a_job_with_the_configured_interval():
+    scheduler = build_scheduler([], session_factory=lambda: None)
+
+    add_classification_job(
+        scheduler, session_factory=lambda: None, batch_size=20, interval_minutes=3
+    )
+
+    job = scheduler.get_job("classification")
+    assert job is not None
+    assert job.trigger.interval.total_seconds() == 3 * 60
+    assert job.next_run_time is not None
+    assert job.next_run_time <= datetime.now(timezone.utc) + timedelta(seconds=5)
+
+
+@pytest.mark.asyncio
+async def test_classify_job_runs_a_full_classification_cycle(db_session, make_source, monkeypatch):
+    make_source(source_id="flightglobal")
+    item = NewsItem(
+        source_id="flightglobal",
+        source_item_id="1",
+        canonical_url="https://example.com/a",
+        original_url="https://example.com/a",
+        original_title="Airbus unveils new variant",
+        original_text="Body",
+    )
+    db_session.add(item)
+    db_session.commit()
+
+    async def fake_classify_item(title, text):
+        return ClassificationResult(
+            primary_category="COMMERCIAL",
+            secondary_categories=[],
+            classification_confidence=0.7,
+            reasoning="ok",
+        )
+
+    monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
+
+    await _classify_job(session_factory=lambda: db_session, batch_size=10)
+
+    stored = db_session.get(NewsItem, item.id)
+    assert stored.primary_category == "COMMERCIAL"
+
+
+@pytest.mark.asyncio
+async def test_classify_job_does_not_raise_on_unexpected_error(db_session, monkeypatch):
+    async def broken_classify_pending_items(session, batch_size):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(scheduler_module, "classify_pending_items", broken_classify_pending_items)
+
+    # Must not raise out of the scheduled job.
+    await _classify_job(session_factory=lambda: db_session, batch_size=10)

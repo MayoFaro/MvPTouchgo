@@ -51,17 +51,33 @@ async def classify_pending_items(
                 # commit) can leave the session in "rollback required" state:
                 # roll back first, otherwise the next iteration's commit fails too.
                 session.rollback()
-                item.classification_attempts += 1
-                errors = list((item.model_metadata or {}).get("classification_errors", []))
-                errors.append(
-                    {
-                        "attempt": item.classification_attempts,
-                        "at": datetime.now(timezone.utc).isoformat(),
-                        "error": str(exc)[:500],
+                try:
+                    item.classification_attempts += 1
+                    errors = list((item.model_metadata or {}).get("classification_errors", []))
+                    errors.append(
+                        {
+                            "attempt": item.classification_attempts,
+                            "at": datetime.now(timezone.utc).isoformat(),
+                            "error": f"{type(exc).__name__}: {exc}"[:500],
+                        }
+                    )
+                    item.model_metadata = {
+                        **(item.model_metadata or {}),
+                        "classification_errors": errors,
                     }
-                )
-                item.model_metadata = {**(item.model_metadata or {}), "classification_errors": errors}
-                session.commit()
+                    session.commit()
+                    if item.classification_attempts >= max_attempts:
+                        logger.warning(
+                            "Item %s exhausted classification attempts (%d/%d)",
+                            item.id,
+                            item.classification_attempts,
+                            max_attempts,
+                        )
+                except Exception:  # noqa: BLE001 - recording the failure must not itself break isolation
+                    logger.exception(
+                        "Failed to record classification failure bookkeeping for item %s", item.id
+                    )
+                    session.rollback()
                 logger.exception("Classification failed for item %s", item.id)
                 failed += 1
                 continue

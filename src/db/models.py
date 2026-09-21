@@ -61,7 +61,9 @@ class NewsItem(Base):
     primary_category: Mapped[str | None] = mapped_column(String, nullable=True)
     secondary_categories: Mapped[list | None] = mapped_column(JSON, nullable=True)
     classification_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
-    classification_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    classification_attempts: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
 
     country: Mapped[str | None] = mapped_column(String, nullable=True)
     region: Mapped[str | None] = mapped_column(String, nullable=True)

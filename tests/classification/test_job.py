@@ -217,3 +217,112 @@ async def test_classify_pending_items_increments_attempts_and_logs_reason_on_fai
     assert len(errors) == 1
     assert errors[0]["attempt"] == 1
     assert "boom" in errors[0]["error"]
+
+
+@pytest.mark.asyncio
+async def test_classify_pending_items_survives_a_commit_failure_while_recording_a_failure(
+    db_session, make_source, monkeypatch
+):
+    """Recording the attempts/error-log bookkeeping after a failed item is itself a
+    DB write that can fail. It must not escape and abort the rest of the batch —
+    the same isolation guarantee the surrounding except block already provides for
+    classify_item() failures must hold for this bookkeeping write too."""
+    failing_item = _pending_item(
+        db_session,
+        make_source,
+        source_id="flightglobal",
+        original_title="Failing item title",
+        original_text="Failing item body",
+    )
+    ok_item = _pending_item(
+        db_session,
+        make_source,
+        source_id="reuters",
+        original_title="OK item title",
+        original_text="OK item body",
+    )
+
+    async def fake_classify_item(title, text, client=None):
+        if title == "Failing item title":
+            raise ClassificationError("boom")
+        return ClassificationResult(
+            primary_category="DIVERS",
+            secondary_categories=[],
+            classification_confidence=0.4,
+            reasoning="ok",
+        )
+
+    monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
+
+    original_commit = db_session.commit
+    calls = {"n": 0}
+
+    def flaky_commit():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("simulated commit failure while recording the error log")
+        return original_commit()
+
+    monkeypatch.setattr(db_session, "commit", flaky_commit)
+
+    result = await classify_pending_items(db_session, batch_size=10, max_attempts=5)
+
+    assert result.classified == 1
+    assert result.failed == 1
+    assert db_session.get(NewsItem, ok_item.id).primary_category == "DIVERS"
+
+
+@pytest.mark.asyncio
+async def test_classify_pending_items_stops_retrying_once_max_attempts_reached(
+    db_session, make_source, monkeypatch
+):
+    item = _pending_item(db_session, make_source, source_id="flightglobal")
+
+    async def always_fails(title, text, client=None):
+        raise ClassificationError("boom")
+
+    monkeypatch.setattr(job_module, "classify_item", always_fails)
+
+    max_attempts = 3
+    for _ in range(max_attempts):
+        result = await classify_pending_items(db_session, batch_size=10, max_attempts=max_attempts)
+        assert result.classified == 0
+        assert result.failed == 1
+
+    # expire_all forces a real re-fetch from the DB rather than reading back
+    # the identity-mapped in-memory object (this session has expire_on_commit=False).
+    db_session.expire_all()
+    stored = db_session.get(NewsItem, item.id)
+    assert stored.classification_attempts == max_attempts
+    assert len(stored.model_metadata["classification_errors"]) == max_attempts
+
+    async def should_not_be_called(title, text, client=None):
+        raise AssertionError("item exhausted its attempts and must not be retried")
+
+    monkeypatch.setattr(job_module, "classify_item", should_not_be_called)
+
+    result = await classify_pending_items(db_session, batch_size=10, max_attempts=max_attempts)
+
+    assert result.classified == 0
+    assert result.failed == 0
+
+
+@pytest.mark.asyncio
+async def test_classify_pending_items_preserves_existing_model_metadata_keys_on_failure(
+    db_session, make_source, monkeypatch
+):
+    item = _pending_item(
+        db_session, make_source, source_id="flightglobal", model_metadata={"foo": "bar"}
+    )
+
+    async def fake_classify_item(title, text, client=None):
+        raise ClassificationError("boom")
+
+    monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
+
+    await classify_pending_items(db_session, batch_size=10, max_attempts=5)
+
+    db_session.expire_all()
+    stored = db_session.get(NewsItem, item.id)
+    assert stored.model_metadata["foo"] == "bar"
+    assert len(stored.model_metadata["classification_errors"]) == 1

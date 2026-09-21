@@ -11,6 +11,9 @@ from src.collectors.runner import run_collection
 from src.collectors.sources_config import SourceConfig
 from src.collectors.factory import build_collector
 from src.db.models import NewsItem
+import src.classification.job as job_module
+from src.classification.client import ClassificationResult
+from src.classification.job import classify_pending_items
 
 FEED = (Path(__file__).parent / "fixtures" / "sample_feed.xml").read_text()
 
@@ -129,3 +132,52 @@ async def test_cross_source_duplicate_is_linked_but_still_visible(db_session, ma
     titles = [item["original_title"] for item in response.json()]
     assert titles.count("First article") == 2
     assert "Second article" in titles
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_collected_items_get_classified_and_are_visible_via_api(
+    db_session, make_source, monkeypatch
+):
+    make_source(source_id="flightglobal", url="https://example.com/feed")
+    config = SourceConfig(
+        id="flightglobal",
+        name="FlightGlobal",
+        type="rss",
+        url="https://example.com/feed",
+        language="en",
+        source_type="press",
+        poll_interval_minutes=30,
+    )
+    respx.get("https://example.com/feed").mock(
+        return_value=httpx.Response(200, text=FEED, headers={"content-type": "application/rss+xml"})
+    )
+    collector = build_collector(config)
+    collection_result = await run_collection(db_session, config, collector)
+    assert collection_result.inserted == 2
+
+    async def fake_classify_item(title, text):
+        return ClassificationResult(
+            primary_category="COMMERCIAL",
+            secondary_categories=[],
+            classification_confidence=0.6,
+            reasoning="Test classification.",
+        )
+
+    monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
+
+    classification_result = await classify_pending_items(db_session, batch_size=10)
+    assert classification_result.classified == 2
+    assert classification_result.failed == 0
+
+    app.dependency_overrides[get_session] = lambda: db_session
+    try:
+        response = TestClient(app).get("/items")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 2
+    assert all(item["primary_category"] == "COMMERCIAL" for item in body)
+    assert all(item["classification_confidence"] == 0.6 for item in body)

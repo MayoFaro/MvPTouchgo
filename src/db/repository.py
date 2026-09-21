@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from src.collectors.base import RawItem
 from src.collectors.sources_config import SourceConfig
 from src.db.models import NewsItem, NewsSource
+from src.normalization.dedup import find_duplicate
 from src.normalization.text import compute_content_hash
 from src.normalization.url import canonicalize_url
 
@@ -69,6 +70,15 @@ def save_raw_items(session: Session, source_id: str, items: list[RawItem]) -> Sa
         seen_in_batch.add(key)
         canonical_url = canonicalize_url(item.original_url)
         content_hash = compute_content_hash(item.original_title, item.original_text)
+        reference_date = item.published_at or datetime.now(timezone.utc)
+        duplicate = find_duplicate(
+            session,
+            canonical_url=canonical_url,
+            content_hash=content_hash,
+            original_title=item.original_title,
+            reference_date=reference_date,
+        )
+        duplicate_of_id = (duplicate.duplicate_of or duplicate.id) if duplicate is not None else None
         session.add(
             NewsItem(
                 source_id=source_id,
@@ -82,6 +92,7 @@ def save_raw_items(session: Session, source_id: str, items: list[RawItem]) -> Sa
                 published_at=item.published_at,
                 status="NEW",
                 content_hash=content_hash,
+                duplicate_of=duplicate_of_id,
             )
         )
         inserted += 1

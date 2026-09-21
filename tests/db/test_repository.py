@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from src.collectors.base import RawItem
 from src.collectors.sources_config import SourceConfig
 from src.db.models import NewsItem, NewsSource
@@ -173,3 +175,136 @@ def test_save_raw_items_computes_content_hash(db_session, make_source):
 
     stored = db_session.query(NewsItem).filter_by(source_item_id="1").one()
     assert stored.content_hash == compute_content_hash("Some Title", "Some body text")
+
+
+def test_save_raw_items_marks_duplicate_by_matching_canonical_url(db_session, make_source):
+    make_source(source_id="flightglobal")
+    make_source(source_id="reuters")
+    original = RawItem(
+        source_item_id="1",
+        canonical_url="https://example.com/a",
+        original_url="https://example.com/a",
+        original_title="Original title",
+        original_text="Original body",
+        language="en",
+    )
+    save_raw_items(db_session, "flightglobal", [original])
+    original_id = db_session.query(NewsItem).filter_by(source_item_id="1").one().id
+
+    duplicate = RawItem(
+        source_item_id="99",
+        canonical_url="https://example.com/a",
+        original_url="https://example.com/a?utm_source=newsletter",
+        original_title="A different title entirely",
+        original_text="Completely different body",
+        language="en",
+    )
+    save_raw_items(db_session, "reuters", [duplicate])
+
+    stored = db_session.query(NewsItem).filter_by(source_item_id="99").one()
+    assert stored.duplicate_of == original_id
+
+
+def test_save_raw_items_marks_duplicate_by_similar_title_within_window(db_session, make_source):
+    make_source(source_id="flightglobal")
+    make_source(source_id="reuters")
+    original = RawItem(
+        source_item_id="1",
+        canonical_url="https://example.com/a",
+        original_url="https://example.com/a",
+        original_title="Airbus unveils new variant",
+        original_text="Original body",
+        language="en",
+        published_at=datetime(2026, 1, 1, 10, 0, tzinfo=timezone.utc),
+    )
+    save_raw_items(db_session, "flightglobal", [original])
+    original_id = db_session.query(NewsItem).filter_by(source_item_id="1").one().id
+
+    similar = RawItem(
+        source_item_id="99",
+        canonical_url="https://example.com/b",
+        original_url="https://example.com/b",
+        original_title="Airbus unveils new variant",
+        original_text="A differently worded confirmation of the same news",
+        language="en",
+        published_at=datetime(2026, 1, 1, 18, 0, tzinfo=timezone.utc),
+    )
+    save_raw_items(db_session, "reuters", [similar])
+
+    stored = db_session.query(NewsItem).filter_by(source_item_id="99").one()
+    assert stored.duplicate_of == original_id
+
+
+def test_save_raw_items_does_not_mark_unrelated_items_as_duplicates(db_session, make_source):
+    make_source(source_id="flightglobal")
+    items = [
+        RawItem(
+            source_item_id="1",
+            canonical_url="https://example.com/a",
+            original_url="https://example.com/a",
+            original_title="Airbus unveils new variant",
+            original_text="Body A",
+            language="en",
+        ),
+        RawItem(
+            source_item_id="2",
+            canonical_url="https://example.com/b",
+            original_url="https://example.com/b",
+            original_title="Boeing delivers first order",
+            original_text="Body B",
+            language="en",
+        ),
+    ]
+
+    save_raw_items(db_session, "flightglobal", items)
+
+    stored = db_session.query(NewsItem).filter_by(source_id="flightglobal").all()
+    assert all(item.duplicate_of is None for item in stored)
+
+
+def test_save_raw_items_resolves_duplicate_chain_to_the_root(db_session, make_source):
+    make_source(source_id="flightglobal")
+    make_source(source_id="reuters")
+    make_source(source_id="air-cosmos")
+
+    root = RawItem(
+        source_item_id="1",
+        canonical_url="https://example.com/a",
+        original_url="https://example.com/a",
+        original_title="Airbus unveils new variant",
+        original_text="Root body",
+        language="en",
+        published_at=datetime(2026, 1, 1, 10, 0, tzinfo=timezone.utc),
+    )
+    save_raw_items(db_session, "flightglobal", [root])
+    root_id = db_session.query(NewsItem).filter_by(source_item_id="1").one().id
+
+    # Duplicate of root by exact content hash (identical title + text).
+    second = RawItem(
+        source_item_id="1",
+        canonical_url="https://example.com/b",
+        original_url="https://example.com/b",
+        original_title="Airbus unveils new variant",
+        original_text="Root body",
+        language="en",
+        published_at=datetime(2026, 1, 1, 11, 0, tzinfo=timezone.utc),
+    )
+    save_raw_items(db_session, "reuters", [second])
+    second_id = db_session.query(NewsItem).filter_by(source_id="reuters").one().id
+    assert db_session.get(NewsItem, second_id).duplicate_of == root_id
+
+    # Similar title to `second`, within the date window of `second` (not `root`),
+    # but must still resolve to `root_id`, not `second_id`.
+    third = RawItem(
+        source_item_id="1",
+        canonical_url="https://example.com/c",
+        original_url="https://example.com/c",
+        original_title="Airbus unveils new variant",
+        original_text="A third, differently worded write-up",
+        language="en",
+        published_at=datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc),
+    )
+    save_raw_items(db_session, "air-cosmos", [third])
+
+    third_stored = db_session.query(NewsItem).filter_by(source_id="air-cosmos").one()
+    assert third_stored.duplicate_of == root_id

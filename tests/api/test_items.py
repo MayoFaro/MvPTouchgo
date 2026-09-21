@@ -26,6 +26,7 @@ def test_items_returns_persisted_items(db_session, make_source):
     stored.primary_category = "COMMERCIAL"
     stored.secondary_categories = ["EMPLOI"]
     stored.classification_confidence = 0.75
+    stored.classification_attempts = 2
     db_session.commit()
 
     app.dependency_overrides[get_session] = lambda: db_session
@@ -43,4 +44,5 @@ def test_items_returns_persisted_items(db_session, make_source):
     assert body[0]["primary_category"] == "COMMERCIAL"
     assert body[0]["secondary_categories"] == ["EMPLOI"]
     assert body[0]["classification_confidence"] == 0.75
+    assert body[0]["classification_attempts"] == 2
     assert body[0]["duplicate_of"] is None

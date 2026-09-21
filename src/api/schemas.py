@@ -18,4 +18,5 @@ class NewsItemOut(BaseModel):
     primary_category: str | None
     secondary_categories: list[str] | None
     classification_confidence: float | None
+    classification_attempts: int
     duplicate_of: int | None

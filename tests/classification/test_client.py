@@ -27,9 +27,11 @@ class _FakeMessages:
         self._exception = exception
         self._fail_times = fail_times
         self.calls = 0
+        self.last_kwargs: dict | None = None
 
     async def create(self, **kwargs):
         self.calls += 1
+        self.last_kwargs = kwargs
         if self.calls <= self._fail_times:
             raise RuntimeError("simulated transient failure")
         if self._exception is not None:
@@ -121,3 +123,15 @@ async def test_classify_item_raises_classification_error_after_max_attempts():
         await classify_item("Some title", "Some text", client=client)
 
     assert client.messages.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_classify_item_truncates_long_article_text():
+    client = _FakeAnthropicClient(response=_valid_response())
+    long_text = "x" * 10_000
+
+    await classify_item("Some title", long_text, client=client)
+
+    sent_message = client.messages.last_kwargs["messages"][0]["content"]
+    assert "x" * 4000 in sent_message
+    assert "x" * 4001 not in sent_message

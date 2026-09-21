@@ -156,7 +156,7 @@ async def test_collected_items_get_classified_and_are_visible_via_api(
     collection_result = await run_collection(db_session, config, collector)
     assert collection_result.inserted == 2
 
-    async def fake_classify_item(title, text):
+    async def fake_classify_item(title, text, client=None):
         return ClassificationResult(
             primary_category="COMMERCIAL",
             secondary_categories=[],

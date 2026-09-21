@@ -49,7 +49,10 @@ async def classify_item(
     client: anthropic.AsyncAnthropic | None = None,
 ) -> ClassificationResult:
     active_client = client or anthropic.AsyncAnthropic(api_key=get_settings().anthropic_api_key)
-    user_message = f"Titre : {title}\n\nTexte : {text}"
+    # Bound the article body sent to the model: caps token cost and avoids risking
+    # the context window on an arbitrarily long scraped article.
+    truncated_text = text[:4000]
+    user_message = f"Titre : {title}\n\nTexte :\n<article>\n{truncated_text}\n</article>"
 
     last_error: Exception | None = None
     for attempt in range(1, MAX_ATTEMPTS + 1):

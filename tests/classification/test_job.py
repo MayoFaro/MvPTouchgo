@@ -35,7 +35,7 @@ async def test_classify_pending_items_returns_zero_when_nothing_pending(db_sessi
 async def test_classify_pending_items_updates_matched_items(db_session, make_source, monkeypatch):
     item = _pending_item(db_session, make_source, source_id="flightglobal")
 
-    async def fake_classify_item(title, text):
+    async def fake_classify_item(title, text, client=None):
         return ClassificationResult(
             primary_category="MILITAIRE",
             secondary_categories=["ACCIDENT_INCIDENT"],
@@ -62,7 +62,7 @@ async def test_classify_pending_items_skips_already_classified_items(
 ):
     _pending_item(db_session, make_source, source_id="flightglobal", primary_category="COMMERCIAL")
 
-    async def fake_classify_item(title, text):
+    async def fake_classify_item(title, text, client=None):
         raise AssertionError("should not be called for an already-classified item")
 
     monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
@@ -92,9 +92,51 @@ async def test_classify_pending_items_isolates_a_single_item_failure(
         original_text="OK item body",
     )
 
-    async def fake_classify_item(title, text):
+    async def fake_classify_item(title, text, client=None):
         if title == "Failing item title":
             raise ClassificationError("boom")
+        return ClassificationResult(
+            primary_category="DIVERS",
+            secondary_categories=[],
+            classification_confidence=0.4,
+            reasoning="ok",
+        )
+
+    monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
+
+    result = await classify_pending_items(db_session, batch_size=10)
+
+    assert result.classified == 1
+    assert result.failed == 1
+    assert db_session.get(NewsItem, failing_item.id).primary_category is None
+    assert db_session.get(NewsItem, ok_item.id).primary_category == "DIVERS"
+
+
+@pytest.mark.asyncio
+async def test_classify_pending_items_isolates_a_non_classification_error(
+    db_session, make_source, monkeypatch
+):
+    """A bug, a DB error, or any other non-ClassificationError failure on one item
+    must not abort the rest of the batch, and must not leave the session in a
+    broken state for the next iteration's commit."""
+    failing_item = _pending_item(
+        db_session,
+        make_source,
+        source_id="flightglobal",
+        original_title="Failing item title",
+        original_text="Failing item body",
+    )
+    ok_item = _pending_item(
+        db_session,
+        make_source,
+        source_id="reuters",
+        original_title="OK item title",
+        original_text="OK item body",
+    )
+
+    async def fake_classify_item(title, text, client=None):
+        if title == "Failing item title":
+            raise RuntimeError("unexpected bug")
         return ClassificationResult(
             primary_category="DIVERS",
             secondary_categories=[],
@@ -118,7 +160,7 @@ async def test_classify_pending_items_respects_batch_size(db_session, make_sourc
     _pending_item(db_session, make_source, source_id="flightglobal-2", source_item_id="2")
     _pending_item(db_session, make_source, source_id="flightglobal-3", source_item_id="3")
 
-    async def fake_classify_item(title, text):
+    async def fake_classify_item(title, text, client=None):
         return ClassificationResult(
             primary_category="DIVERS",
             secondary_categories=[],

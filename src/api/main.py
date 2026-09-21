@@ -29,6 +29,7 @@ async def lifespan(app: FastAPI):
         SessionLocal,
         batch_size=settings.classification_batch_size,
         interval_minutes=settings.classification_interval_minutes,
+        max_attempts=settings.classification_max_attempts,
     )
     scheduler.start()
     app.state.scheduler = scheduler

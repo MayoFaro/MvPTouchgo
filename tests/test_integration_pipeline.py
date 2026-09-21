@@ -166,7 +166,7 @@ async def test_collected_items_get_classified_and_are_visible_via_api(
 
     monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
 
-    classification_result = await classify_pending_items(db_session, batch_size=10)
+    classification_result = await classify_pending_items(db_session, batch_size=10, max_attempts=5)
     assert classification_result.classified == 2
     assert classification_result.failed == 0
 

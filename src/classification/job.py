@@ -1,5 +1,6 @@
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 import anthropic
 from sqlalchemy import select
@@ -18,11 +19,16 @@ class ClassificationJobResult:
     failed: int
 
 
-async def classify_pending_items(session: Session, batch_size: int) -> ClassificationJobResult:
+async def classify_pending_items(
+    session: Session, batch_size: int, max_attempts: int
+) -> ClassificationJobResult:
     pending = (
         session.execute(
             select(NewsItem)
-            .where(NewsItem.primary_category.is_(None))
+            .where(
+                NewsItem.primary_category.is_(None),
+                NewsItem.classification_attempts < max_attempts,
+            )
             .order_by(NewsItem.detected_at.asc())
             .limit(batch_size)
         )
@@ -40,11 +46,22 @@ async def classify_pending_items(session: Session, batch_size: int) -> Classific
         for item in pending:
             try:
                 result = await classify_item(item.original_title, item.original_text, client=client)
-            except Exception:  # noqa: BLE001 - a single item must never break the whole batch
+            except Exception as exc:  # noqa: BLE001 - a single item must never break the whole batch
                 # A failure mid-item (classification or a DB error from a prior
                 # commit) can leave the session in "rollback required" state:
                 # roll back first, otherwise the next iteration's commit fails too.
                 session.rollback()
+                item.classification_attempts += 1
+                errors = list((item.model_metadata or {}).get("classification_errors", []))
+                errors.append(
+                    {
+                        "attempt": item.classification_attempts,
+                        "at": datetime.now(timezone.utc).isoformat(),
+                        "error": str(exc)[:500],
+                    }
+                )
+                item.model_metadata = {**(item.model_metadata or {}), "classification_errors": errors}
+                session.commit()
                 logger.exception("Classification failed for item %s", item.id)
                 failed += 1
                 continue

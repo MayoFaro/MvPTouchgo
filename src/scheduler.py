@@ -52,22 +52,23 @@ def add_classification_job(
     session_factory,
     batch_size: int,
     interval_minutes: int,
+    max_attempts: int,
 ) -> None:
     scheduler.add_job(
         _classify_job,
         "interval",
         minutes=interval_minutes,
         id="classification",
-        args=[session_factory, batch_size],
+        args=[session_factory, batch_size, max_attempts],
         # Fire once right away instead of waiting a full poll interval.
         next_run_time=datetime.now(timezone.utc),
     )
 
 
-async def _classify_job(session_factory, batch_size: int) -> None:
+async def _classify_job(session_factory, batch_size: int, max_attempts: int) -> None:
     session = session_factory()
     try:
-        await classify_pending_items(session, batch_size)
+        await classify_pending_items(session, batch_size, max_attempts)
     except Exception:  # noqa: BLE001 - the classification job must never crash the scheduler
         logger.exception("Classification job failed")
     finally:

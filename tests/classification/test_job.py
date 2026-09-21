@@ -25,7 +25,7 @@ def _pending_item(db_session, make_source, source_id: str, **overrides) -> NewsI
 
 @pytest.mark.asyncio
 async def test_classify_pending_items_returns_zero_when_nothing_pending(db_session):
-    result = await classify_pending_items(db_session, batch_size=10)
+    result = await classify_pending_items(db_session, batch_size=10, max_attempts=5)
 
     assert result.classified == 0
     assert result.failed == 0
@@ -45,7 +45,7 @@ async def test_classify_pending_items_updates_matched_items(db_session, make_sou
 
     monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
 
-    result = await classify_pending_items(db_session, batch_size=10)
+    result = await classify_pending_items(db_session, batch_size=10, max_attempts=5)
 
     assert result.classified == 1
     assert result.failed == 0
@@ -67,7 +67,7 @@ async def test_classify_pending_items_skips_already_classified_items(
 
     monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
 
-    result = await classify_pending_items(db_session, batch_size=10)
+    result = await classify_pending_items(db_session, batch_size=10, max_attempts=5)
 
     assert result.classified == 0
     assert result.failed == 0
@@ -104,7 +104,7 @@ async def test_classify_pending_items_isolates_a_single_item_failure(
 
     monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
 
-    result = await classify_pending_items(db_session, batch_size=10)
+    result = await classify_pending_items(db_session, batch_size=10, max_attempts=5)
 
     assert result.classified == 1
     assert result.failed == 1
@@ -146,7 +146,7 @@ async def test_classify_pending_items_isolates_a_non_classification_error(
 
     monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
 
-    result = await classify_pending_items(db_session, batch_size=10)
+    result = await classify_pending_items(db_session, batch_size=10, max_attempts=5)
 
     assert result.classified == 1
     assert result.failed == 1
@@ -170,7 +170,50 @@ async def test_classify_pending_items_respects_batch_size(db_session, make_sourc
 
     monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
 
-    result = await classify_pending_items(db_session, batch_size=2)
+    result = await classify_pending_items(db_session, batch_size=2, max_attempts=5)
 
     assert result.classified == 2
     assert result.failed == 0
+
+
+@pytest.mark.asyncio
+async def test_classify_pending_items_excludes_items_that_reached_max_attempts(
+    db_session, make_source, monkeypatch
+):
+    exhausted_item = _pending_item(
+        db_session, make_source, source_id="flightglobal", classification_attempts=3
+    )
+
+    async def fake_classify_item(title, text, client=None):
+        raise AssertionError("should not be called for an item that reached max_attempts")
+
+    monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
+
+    result = await classify_pending_items(db_session, batch_size=10, max_attempts=3)
+
+    assert result.classified == 0
+    assert result.failed == 0
+    assert db_session.get(NewsItem, exhausted_item.id).primary_category is None
+
+
+@pytest.mark.asyncio
+async def test_classify_pending_items_increments_attempts_and_logs_reason_on_failure(
+    db_session, make_source, monkeypatch
+):
+    item = _pending_item(db_session, make_source, source_id="flightglobal")
+
+    async def fake_classify_item(title, text, client=None):
+        raise ClassificationError("boom")
+
+    monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
+
+    result = await classify_pending_items(db_session, batch_size=10, max_attempts=5)
+
+    assert result.classified == 0
+    assert result.failed == 1
+    stored = db_session.get(NewsItem, item.id)
+    assert stored.classification_attempts == 1
+    errors = stored.model_metadata["classification_errors"]
+    assert len(errors) == 1
+    assert errors[0]["attempt"] == 1
+    assert "boom" in errors[0]["error"]

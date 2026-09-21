@@ -86,7 +86,11 @@ def test_add_classification_job_registers_a_job_with_the_configured_interval():
     scheduler = build_scheduler([], session_factory=lambda: None)
 
     add_classification_job(
-        scheduler, session_factory=lambda: None, batch_size=20, interval_minutes=3
+        scheduler,
+        session_factory=lambda: None,
+        batch_size=20,
+        interval_minutes=3,
+        max_attempts=5,
     )
 
     job = scheduler.get_job("classification")
@@ -120,7 +124,7 @@ async def test_classify_job_runs_a_full_classification_cycle(db_session, make_so
 
     monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
 
-    await _classify_job(session_factory=lambda: db_session, batch_size=10)
+    await _classify_job(session_factory=lambda: db_session, batch_size=10, max_attempts=5)
 
     stored = db_session.get(NewsItem, item.id)
     assert stored.primary_category == "COMMERCIAL"
@@ -128,10 +132,28 @@ async def test_classify_job_runs_a_full_classification_cycle(db_session, make_so
 
 @pytest.mark.asyncio
 async def test_classify_job_does_not_raise_on_unexpected_error(db_session, monkeypatch):
-    async def broken_classify_pending_items(session, batch_size):
+    async def broken_classify_pending_items(session, batch_size, max_attempts):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(scheduler_module, "classify_pending_items", broken_classify_pending_items)
 
     # Must not raise out of the scheduled job.
-    await _classify_job(session_factory=lambda: db_session, batch_size=10)
+    await _classify_job(session_factory=lambda: db_session, batch_size=10, max_attempts=5)
+
+
+@pytest.mark.asyncio
+async def test_classify_job_passes_max_attempts_through_to_classify_pending_items(
+    db_session, monkeypatch
+):
+    received = {}
+
+    async def spy_classify_pending_items(session, batch_size, max_attempts):
+        received["batch_size"] = batch_size
+        received["max_attempts"] = max_attempts
+        return job_module.ClassificationJobResult(classified=0, failed=0)
+
+    monkeypatch.setattr(scheduler_module, "classify_pending_items", spy_classify_pending_items)
+
+    await _classify_job(session_factory=lambda: db_session, batch_size=7, max_attempts=2)
+
+    assert received == {"batch_size": 7, "max_attempts": 2}

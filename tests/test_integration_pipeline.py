@@ -14,6 +14,21 @@ from src.db.models import NewsItem
 
 FEED = (Path(__file__).parent / "fixtures" / "sample_feed.xml").read_text()
 
+SECOND_SOURCE_FEED = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Reuters Feed</title>
+    <item>
+      <title>First article</title>
+      <link>https://reuters.example.com/articles/99</link>
+      <guid>https://reuters.example.com/articles/99</guid>
+      <description>A different summary confirming the first article.</description>
+      <pubDate>Mon, 01 Jan 2026 18:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>
+"""
+
 
 @pytest.mark.asyncio
 @respx.mock
@@ -48,3 +63,69 @@ async def test_full_pipeline_from_collection_to_api(db_session, make_source):
     assert response.status_code == 200
     titles = {item["original_title"] for item in response.json()}
     assert titles == {"First article", "Second article"}
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_cross_source_duplicate_is_linked_but_still_visible(db_session, make_source):
+    make_source(source_id="flightglobal", url="https://example.com/feed")
+    make_source(source_id="reuters", url="https://reuters.example.com/feed")
+
+    flightglobal_config = SourceConfig(
+        id="flightglobal",
+        name="FlightGlobal",
+        type="rss",
+        url="https://example.com/feed",
+        language="en",
+        source_type="press",
+        poll_interval_minutes=30,
+    )
+    reuters_config = SourceConfig(
+        id="reuters",
+        name="Reuters",
+        type="rss",
+        url="https://reuters.example.com/feed",
+        language="en",
+        source_type="press",
+        poll_interval_minutes=30,
+    )
+    respx.get("https://example.com/feed").mock(
+        return_value=httpx.Response(200, text=FEED, headers={"content-type": "application/rss+xml"})
+    )
+    respx.get("https://reuters.example.com/feed").mock(
+        return_value=httpx.Response(
+            200, text=SECOND_SOURCE_FEED, headers={"content-type": "application/rss+xml"}
+        )
+    )
+
+    first_result = await run_collection(
+        db_session, flightglobal_config, build_collector(flightglobal_config)
+    )
+    assert first_result.ok is True
+    assert first_result.inserted == 2
+
+    second_result = await run_collection(
+        db_session, reuters_config, build_collector(reuters_config)
+    )
+    assert second_result.ok is True
+    assert second_result.inserted == 1
+
+    flightglobal_first_article = (
+        db_session.query(NewsItem)
+        .filter_by(source_id="flightglobal", original_title="First article")
+        .one()
+    )
+    reuters_item = db_session.query(NewsItem).filter_by(source_id="reuters").one()
+    assert reuters_item.duplicate_of == flightglobal_first_article.id
+    assert db_session.query(NewsItem).count() == 3
+
+    app.dependency_overrides[get_session] = lambda: db_session
+    try:
+        response = TestClient(app).get("/items")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    titles = [item["original_title"] for item in response.json()]
+    assert titles.count("First article") == 2
+    assert "Second article" in titles

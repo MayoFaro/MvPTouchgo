@@ -77,11 +77,6 @@ def db_session(engine):
 @pytest.fixture()
 def make_source(db_session):
     def _make(source_id: str = "test-source", **overrides) -> NewsSource:
-        # Check if source already exists to support multiple calls with the same ID
-        existing = db_session.get(NewsSource, source_id)
-        if existing:
-            return existing
-
         source = NewsSource(
             id=source_id,
             name=overrides.get("name", "Test Source"),

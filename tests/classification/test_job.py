@@ -114,9 +114,9 @@ async def test_classify_pending_items_isolates_a_single_item_failure(
 
 @pytest.mark.asyncio
 async def test_classify_pending_items_respects_batch_size(db_session, make_source, monkeypatch):
-    _pending_item(db_session, make_source, source_id="flightglobal", source_item_id="1")
-    _pending_item(db_session, make_source, source_id="flightglobal", source_item_id="2")
-    _pending_item(db_session, make_source, source_id="flightglobal", source_item_id="3")
+    _pending_item(db_session, make_source, source_id="flightglobal-1", source_item_id="1")
+    _pending_item(db_session, make_source, source_id="flightglobal-2", source_item_id="2")
+    _pending_item(db_session, make_source, source_id="flightglobal-3", source_item_id="3")
 
     async def fake_classify_item(title, text):
         return ClassificationResult(

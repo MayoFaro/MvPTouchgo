@@ -8,6 +8,9 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://touchgo:touchgo@localhost:5432/touchgo_news"
     sources_config_path: str = "config/sources.yaml"
+    anthropic_api_key: str = ""
+    classification_batch_size: int = 20
+    classification_interval_minutes: int = 3
 
 
 @lru_cache

@@ -25,22 +25,28 @@ def find_duplicate(
     original_title: str,
     reference_date: datetime,
 ) -> NewsItem | None:
-    by_url = session.execute(
-        select(NewsItem).where(NewsItem.canonical_url == canonical_url)
-    ).scalars().first()
-    if by_url is not None:
-        return by_url
+    if canonical_url:
+        by_url = session.execute(
+            select(NewsItem).where(NewsItem.canonical_url == canonical_url)
+        ).scalars().first()
+        if by_url is not None:
+            return by_url
+
+    window_start = reference_date - DATE_WINDOW
+    window_end = reference_date + DATE_WINDOW
+    effective_date = func.coalesce(NewsItem.published_at, NewsItem.detected_at)
 
     by_hash = session.execute(
-        select(NewsItem).where(NewsItem.content_hash == content_hash)
+        select(NewsItem).where(
+            NewsItem.content_hash == content_hash,
+            effective_date >= window_start,
+            effective_date <= window_end,
+        )
     ).scalars().first()
     if by_hash is not None:
         return by_hash
 
     normalized_title = normalize_text(original_title)
-    window_start = reference_date - DATE_WINDOW
-    window_end = reference_date + DATE_WINDOW
-    effective_date = func.coalesce(NewsItem.published_at, NewsItem.detected_at)
     candidates = session.execute(
         select(NewsItem).where(
             effective_date >= window_start,

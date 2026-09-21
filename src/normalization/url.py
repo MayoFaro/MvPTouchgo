@@ -15,6 +15,8 @@ _TRACKING_PARAMS = {
 
 def canonicalize_url(url: str) -> str:
     parts = urlsplit(url)
+    if not parts.netloc:
+        return url
 
     path = parts.path
     if len(path) > 1 and path.endswith("/"):

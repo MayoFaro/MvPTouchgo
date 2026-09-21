@@ -29,3 +29,8 @@ def test_canonicalize_url_preserves_root_path():
 def test_canonicalize_url_preserves_non_tracking_query_params():
     result = canonicalize_url("https://example.com/a?id=42")
     assert result == "https://example.com/a?id=42"
+
+
+def test_canonicalize_url_returns_input_unchanged_when_no_host():
+    assert canonicalize_url("") == ""
+    assert canonicalize_url("/relative/path") == "/relative/path"

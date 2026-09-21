@@ -342,3 +342,30 @@ def test_save_raw_items_detects_duplicates_within_the_same_batch(db_session, mak
     assert len(stored) == 2
     assert stored[0].duplicate_of is None
     assert stored[1].duplicate_of == stored[0].id
+
+
+def test_save_raw_items_does_not_link_unrelated_items_with_empty_url(db_session, make_source):
+    make_source(source_id="flightglobal")
+    make_source(source_id="reuters")
+    first = RawItem(
+        source_item_id="1",
+        canonical_url="",
+        original_url="",
+        original_title="Airbus unveils new variant",
+        original_text="Body A",
+        language="en",
+    )
+    save_raw_items(db_session, "flightglobal", [first])
+
+    second = RawItem(
+        source_item_id="2",
+        canonical_url="",
+        original_url="",
+        original_title="Boeing delivers first order",
+        original_text="Body B",
+        language="en",
+    )
+    save_raw_items(db_session, "reuters", [second])
+
+    stored = db_session.query(NewsItem).filter_by(source_id="reuters").one()
+    assert stored.duplicate_of is None

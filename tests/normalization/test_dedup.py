@@ -55,7 +55,7 @@ def test_find_duplicate_matches_by_content_hash(db_session, make_source):
         canonical_url="https://example.com/different",
         content_hash="seedhash",
         original_title="Unrelated title",
-        reference_date=datetime(2030, 1, 1, tzinfo=timezone.utc),
+        reference_date=datetime(2026, 1, 1, 20, 0, tzinfo=timezone.utc),
     )
 
     assert match is not None
@@ -103,6 +103,21 @@ def test_find_duplicate_ignores_dissimilar_title(db_session, make_source):
         content_hash="different-hash",
         original_title="Boeing delivers first order",
         reference_date=datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert match is None
+
+
+def test_find_duplicate_hash_match_requires_date_window(db_session, make_source):
+    make_source(source_id="flightglobal")
+    _insert_item(db_session)
+
+    match = find_duplicate(
+        db_session,
+        canonical_url="https://example.com/different",
+        content_hash="seedhash",
+        original_title="Unrelated title",
+        reference_date=datetime(2028, 1, 1, tzinfo=timezone.utc),
     )
 
     assert match is None

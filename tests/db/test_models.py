@@ -53,3 +53,21 @@ def test_duplicate_source_item_id_rejected(db_session, make_source):
 
     with pytest.raises(IntegrityError):
         db_session.commit()
+
+
+def test_content_hash_column_stores_and_retrieves_value(db_session, make_source):
+    make_source(source_id="flightglobal")
+    item = NewsItem(
+        source_id="flightglobal",
+        source_item_id="hash-test",
+        canonical_url="https://example.com/a",
+        original_url="https://example.com/a",
+        original_title="Title",
+        original_text="Body",
+        content_hash="abc123def456",
+    )
+    db_session.add(item)
+    db_session.commit()
+
+    fetched = db_session.query(NewsItem).filter_by(source_item_id="hash-test").one()
+    assert fetched.content_hash == "abc123def456"

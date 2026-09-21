@@ -50,6 +50,7 @@ class NewsItem(Base):
     original_url: Mapped[str] = mapped_column(String, nullable=False)
     original_title: Mapped[str] = mapped_column(Text, nullable=False)
     original_text: Mapped[str] = mapped_column(Text, nullable=False)
+    content_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     language: Mapped[str | None] = mapped_column(String, nullable=True)
     author: Mapped[str | None] = mapped_column(String, nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

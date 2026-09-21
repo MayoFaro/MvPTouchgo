@@ -95,6 +95,7 @@ def save_raw_items(session: Session, source_id: str, items: list[RawItem]) -> Sa
                 duplicate_of=duplicate_of_id,
             )
         )
+        session.flush()
         inserted += 1
     session.commit()
     return SaveResult(inserted=inserted, skipped_duplicates=skipped)

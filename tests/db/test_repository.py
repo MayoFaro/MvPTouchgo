@@ -308,3 +308,37 @@ def test_save_raw_items_resolves_duplicate_chain_to_the_root(db_session, make_so
 
     third_stored = db_session.query(NewsItem).filter_by(source_id="air-cosmos").one()
     assert third_stored.duplicate_of == root_id
+
+
+def test_save_raw_items_detects_duplicates_within_the_same_batch(db_session, make_source):
+    make_source(source_id="flightglobal")
+    items = [
+        RawItem(
+            source_item_id="1",
+            canonical_url="https://example.com/a",
+            original_url="https://example.com/a?utm_source=newsletter",
+            original_title="Airbus unveils new variant",
+            original_text="Body",
+            language="en",
+        ),
+        RawItem(
+            source_item_id="2",
+            canonical_url="https://example.com/a",
+            original_url="https://example.com/a",
+            original_title="Airbus unveils new variant",
+            original_text="Body",
+            language="en",
+        ),
+    ]
+
+    save_raw_items(db_session, "flightglobal", items)
+
+    stored = (
+        db_session.query(NewsItem)
+        .filter_by(source_id="flightglobal")
+        .order_by(NewsItem.id)
+        .all()
+    )
+    assert len(stored) == 2
+    assert stored[0].duplicate_of is None
+    assert stored[1].duplicate_of == stored[0].id

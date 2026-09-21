@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     classification_batch_size: int = 20
     classification_interval_minutes: int = 3
+    classification_max_attempts: int = 5
 
 
 @lru_cache

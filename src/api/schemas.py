@@ -15,3 +15,7 @@ class NewsItemOut(BaseModel):
     published_at: datetime | None
     detected_at: datetime
     status: str
+    primary_category: str | None
+    secondary_categories: list[str] | None
+    classification_confidence: float | None
+    duplicate_of: int | None

@@ -34,11 +34,14 @@ def parse_scoring_response(response) -> ScoringResult:
             priority = data.get("priority")
             if priority not in PRIORITIES:
                 raise ValueError(f"invalid priority from model: {priority!r}")
+            for key in ("touchgo_interest", "event_importance", "source_confidence", "urgency"):
+                if key not in data:
+                    raise ValueError(f"missing required field {key!r} in model response")
             return ScoringResult(
-                touchgo_interest=int(data.get("touchgo_interest", 0)),
-                event_importance=int(data.get("event_importance", 0)),
-                source_confidence=int(data.get("source_confidence", 0)),
-                urgency=int(data.get("urgency", 0)),
+                touchgo_interest=int(data["touchgo_interest"]),
+                event_importance=int(data["event_importance"]),
+                source_confidence=int(data["source_confidence"]),
+                urgency=int(data["urgency"]),
                 priority=priority,
                 reasoning=str(data.get("reasoning", "")),
             )

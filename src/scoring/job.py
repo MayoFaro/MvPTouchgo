@@ -6,6 +6,7 @@ import anthropic
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from src.adaptive.examples import build_scoring_examples
 from src.config import get_settings
 from src.db.models import NewsItem, NewsSource
 from src.scoring.client import score_item
@@ -40,11 +41,20 @@ async def score_pending_items(
     if not pending:
         return ScoringJobResult(scored=scored, failed=failed)
 
+    settings = get_settings()
+    examples = build_scoring_examples(
+        session, settings.adaptive_min_examples, settings.adaptive_max_examples
+    )
+
     async with anthropic.AsyncAnthropic(api_key=get_settings().anthropic_api_key) as client:
         for item, source_type in pending:
             try:
                 result = await score_item(
-                    item.original_title, item.original_text, source_type, client=client
+                    item.original_title,
+                    item.original_text,
+                    source_type,
+                    examples=examples,
+                    client=client,
                 )
             except Exception as exc:  # noqa: BLE001 - a single item must never break the whole batch
                 # A failure mid-item (scoring or a DB error from a prior commit)

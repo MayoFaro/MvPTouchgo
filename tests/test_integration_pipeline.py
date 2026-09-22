@@ -222,7 +222,7 @@ async def test_collected_items_get_classified_scored_and_are_visible_via_api(
     assert classification_result.classified == 2
     assert classification_result.failed == 0
 
-    async def fake_score_item(title, text, source_type, client=None):
+    async def fake_score_item(title, text, source_type, examples="", client=None):
         return ScoringResult(
             touchgo_interest=8,
             event_importance=7,
@@ -286,7 +286,7 @@ async def test_scored_items_can_receive_feedback_and_be_filtered_via_the_review_
     classification_result = await classify_pending_items(db_session, batch_size=10, max_attempts=5)
     assert classification_result.classified == 2
 
-    async def fake_score_item(title, text, source_type, client=None):
+    async def fake_score_item(title, text, source_type, examples="", client=None):
         return ScoringResult(
             touchgo_interest=8,
             event_importance=7,

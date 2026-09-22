@@ -49,7 +49,7 @@ async def test_score_pending_items_skips_items_not_yet_classified(
 ):
     _scored_pending_item(db_session, make_source, source_id="flightglobal", primary_category=None)
 
-    async def fake_score_item(title, text, source_type, client=None):
+    async def fake_score_item(title, text, source_type, examples="", client=None):
         raise AssertionError("should not be called for an unclassified item")
 
     monkeypatch.setattr(job_module, "score_item", fake_score_item)
@@ -64,7 +64,7 @@ async def test_score_pending_items_skips_items_not_yet_classified(
 async def test_score_pending_items_updates_matched_items(db_session, make_source, monkeypatch):
     item = _scored_pending_item(db_session, make_source, source_id="flightglobal")
 
-    async def fake_score_item(title, text, source_type, client=None):
+    async def fake_score_item(title, text, source_type, examples="", client=None):
         return _valid_result(priority="A")
 
     monkeypatch.setattr(job_module, "score_item", fake_score_item)
@@ -90,7 +90,7 @@ async def test_score_pending_items_passes_the_items_source_type(
 
     received = {}
 
-    async def fake_score_item(title, text, source_type, client=None):
+    async def fake_score_item(title, text, source_type, examples="", client=None):
         received["source_type"] = source_type
         return _valid_result()
 
@@ -107,7 +107,7 @@ async def test_score_pending_items_skips_already_scored_items(
 ):
     _scored_pending_item(db_session, make_source, source_id="flightglobal", touchgo_interest=5)
 
-    async def fake_score_item(title, text, source_type, client=None):
+    async def fake_score_item(title, text, source_type, examples="", client=None):
         raise AssertionError("should not be called for an already-scored item")
 
     monkeypatch.setattr(job_module, "score_item", fake_score_item)
@@ -137,7 +137,7 @@ async def test_score_pending_items_isolates_a_single_item_failure(
         original_text="OK item body",
     )
 
-    async def fake_score_item(title, text, source_type, client=None):
+    async def fake_score_item(title, text, source_type, examples="", client=None):
         if title == "Failing item title":
             raise ScoringError("boom")
         return _valid_result()
@@ -174,7 +174,7 @@ async def test_score_pending_items_isolates_a_non_scoring_error(
         original_text="OK item body",
     )
 
-    async def fake_score_item(title, text, source_type, client=None):
+    async def fake_score_item(title, text, source_type, examples="", client=None):
         if title == "Failing item title":
             raise RuntimeError("unexpected bug")
         return _valid_result()
@@ -195,7 +195,7 @@ async def test_score_pending_items_respects_batch_size(db_session, make_source, 
     _scored_pending_item(db_session, make_source, source_id="flightglobal-2", source_item_id="2")
     _scored_pending_item(db_session, make_source, source_id="flightglobal-3", source_item_id="3")
 
-    async def fake_score_item(title, text, source_type, client=None):
+    async def fake_score_item(title, text, source_type, examples="", client=None):
         return _valid_result()
 
     monkeypatch.setattr(job_module, "score_item", fake_score_item)
@@ -214,7 +214,7 @@ async def test_score_pending_items_excludes_items_that_reached_max_attempts(
         db_session, make_source, source_id="flightglobal", scoring_attempts=3
     )
 
-    async def fake_score_item(title, text, source_type, client=None):
+    async def fake_score_item(title, text, source_type, examples="", client=None):
         raise AssertionError("should not be called for an item that reached max_attempts")
 
     monkeypatch.setattr(job_module, "score_item", fake_score_item)
@@ -232,7 +232,7 @@ async def test_score_pending_items_increments_attempts_and_logs_reason_on_failur
 ):
     item = _scored_pending_item(db_session, make_source, source_id="flightglobal")
 
-    async def fake_score_item(title, text, source_type, client=None):
+    async def fake_score_item(title, text, source_type, examples="", client=None):
         raise ScoringError("boom")
 
     monkeypatch.setattr(job_module, "score_item", fake_score_item)
@@ -272,7 +272,7 @@ async def test_score_pending_items_survives_a_commit_failure_while_recording_a_f
         original_text="OK item body",
     )
 
-    async def fake_score_item(title, text, source_type, client=None):
+    async def fake_score_item(title, text, source_type, examples="", client=None):
         if title == "Failing item title":
             raise ScoringError("boom")
         return _valid_result()
@@ -320,7 +320,7 @@ async def test_score_pending_items_isolates_a_commit_failure_on_the_success_path
         original_text="OK item body",
     )
 
-    async def fake_score_item(title, text, source_type, client=None):
+    async def fake_score_item(title, text, source_type, examples="", client=None):
         return _valid_result()
 
     monkeypatch.setattr(job_module, "score_item", fake_score_item)
@@ -353,7 +353,7 @@ async def test_score_pending_items_stops_retrying_once_max_attempts_reached(
 ):
     item = _scored_pending_item(db_session, make_source, source_id="flightglobal")
 
-    async def always_fails(title, text, source_type, client=None):
+    async def always_fails(title, text, source_type, examples="", client=None):
         raise ScoringError("boom")
 
     monkeypatch.setattr(job_module, "score_item", always_fails)
@@ -371,7 +371,7 @@ async def test_score_pending_items_stops_retrying_once_max_attempts_reached(
     assert stored.scoring_attempts == max_attempts
     assert len(stored.model_metadata["scoring_errors"]) == max_attempts
 
-    async def should_not_be_called(title, text, source_type, client=None):
+    async def should_not_be_called(title, text, source_type, examples="", client=None):
         raise AssertionError("item exhausted its attempts and must not be retried")
 
     monkeypatch.setattr(job_module, "score_item", should_not_be_called)
@@ -395,7 +395,7 @@ async def test_score_pending_items_preserves_classification_errors_in_model_meta
         model_metadata={"classification_errors": [{"attempt": 1, "error": "prior failure"}]},
     )
 
-    async def fake_score_item(title, text, source_type, client=None):
+    async def fake_score_item(title, text, source_type, examples="", client=None):
         raise ScoringError("boom")
 
     monkeypatch.setattr(job_module, "score_item", fake_score_item)
@@ -408,3 +408,54 @@ async def test_score_pending_items_preserves_classification_errors_in_model_meta
         {"attempt": 1, "error": "prior failure"}
     ]
     assert len(stored.model_metadata["scoring_errors"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_score_pending_items_computes_examples_once_per_batch_and_passes_them_through(
+    db_session, make_source, monkeypatch
+):
+    _scored_pending_item(db_session, make_source, source_id="flightglobal", source_item_id="1")
+    _scored_pending_item(db_session, make_source, source_id="reuters", source_item_id="2")
+
+    calls = {"build": 0}
+
+    def fake_build_examples(session, min_examples, max_examples):
+        calls["build"] += 1
+        return "- Item priorité C donnée par le modèle ; retour humain : 🔥 (probablement sous-évalué)."
+
+    monkeypatch.setattr(job_module, "build_scoring_examples", fake_build_examples)
+
+    received_examples = []
+
+    async def fake_score_item(title, text, source_type, examples="", client=None):
+        received_examples.append(examples)
+        return _valid_result()
+
+    monkeypatch.setattr(job_module, "score_item", fake_score_item)
+
+    result = await score_pending_items(db_session, batch_size=10, max_attempts=5)
+
+    assert result.scored == 2
+    assert calls["build"] == 1
+    assert received_examples == [
+        "- Item priorité C donnée par le modèle ; retour humain : 🔥 (probablement sous-évalué).",
+        "- Item priorité C donnée par le modèle ; retour humain : 🔥 (probablement sous-évalué).",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_score_pending_items_skips_building_examples_when_nothing_pending(
+    db_session, monkeypatch
+):
+    calls = {"build": 0}
+
+    def fake_build_examples(session, min_examples, max_examples):
+        calls["build"] += 1
+        return ""
+
+    monkeypatch.setattr(job_module, "build_scoring_examples", fake_build_examples)
+
+    result = await score_pending_items(db_session, batch_size=10, max_attempts=5)
+
+    assert result.scored == 0
+    assert calls["build"] == 0

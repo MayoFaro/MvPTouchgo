@@ -201,7 +201,7 @@ async def test_score_job_runs_a_full_scoring_cycle(db_session, make_source, monk
     db_session.add(item)
     db_session.commit()
 
-    async def fake_score_item(title, text, source_type, client=None):
+    async def fake_score_item(title, text, source_type, examples="", client=None):
         return ScoringResult(
             touchgo_interest=8,
             event_importance=7,

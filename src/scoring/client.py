@@ -37,6 +37,10 @@ def parse_scoring_response(response) -> ScoringResult:
             for key in ("touchgo_interest", "event_importance", "source_confidence", "urgency"):
                 if key not in data:
                     raise ValueError(f"missing required field {key!r} in model response")
+                if not 0 <= int(data[key]) <= 10:
+                    raise ValueError(
+                        f"field {key!r} out of range (must be 0-10): {data[key]!r}"
+                    )
             return ScoringResult(
                 touchgo_interest=int(data["touchgo_interest"]),
                 event_importance=int(data["event_importance"]),

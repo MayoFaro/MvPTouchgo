@@ -115,6 +115,27 @@ def test_parse_scoring_response_rejects_missing_numeric_field():
         parse_scoring_response(response)
 
 
+def test_parse_scoring_response_rejects_out_of_range_score():
+    response = _FakeResponse(
+        [
+            _FakeToolUseBlock(
+                "score_news_item",
+                {
+                    "touchgo_interest": 99,
+                    "event_importance": 5,
+                    "source_confidence": 5,
+                    "urgency": 5,
+                    "priority": "A",
+                    "reasoning": "test",
+                },
+            )
+        ]
+    )
+
+    with pytest.raises(ValueError):
+        parse_scoring_response(response)
+
+
 def test_parse_scoring_response_raises_when_no_tool_use_block():
     with pytest.raises(ValueError):
         parse_scoring_response(_FakeResponse([]))

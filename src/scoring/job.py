@@ -81,15 +81,52 @@ async def score_pending_items(
                 logger.exception("Scoring failed for item %s", item.id)
                 failed += 1
                 continue
-            item.touchgo_interest = result.touchgo_interest
-            item.event_importance = result.event_importance
-            item.source_confidence = result.source_confidence
-            item.urgency = result.urgency
-            item.priority = result.priority
-            item.model_metadata = {
-                **(item.model_metadata or {}),
-                "scoring_reasoning": result.reasoning,
-            }
-            session.commit()
-            scored += 1
+            try:
+                item.touchgo_interest = result.touchgo_interest
+                item.event_importance = result.event_importance
+                item.source_confidence = result.source_confidence
+                item.urgency = result.urgency
+                item.priority = result.priority
+                item.model_metadata = {
+                    **(item.model_metadata or {}),
+                    "scoring_reasoning": result.reasoning,
+                }
+                session.commit()
+                scored += 1
+            except Exception as exc:  # noqa: BLE001 - a single item must never break the whole batch
+                # Persisting a successful score is itself a DB write that can fail
+                # (constraint violation, transient connection error, ...). Roll back
+                # first so the session isn't left in "rollback required" state for
+                # the next iteration's commit.
+                session.rollback()
+                try:
+                    item.scoring_attempts += 1
+                    errors = list((item.model_metadata or {}).get("scoring_errors", []))
+                    errors.append(
+                        {
+                            "attempt": item.scoring_attempts,
+                            "at": datetime.now(timezone.utc).isoformat(),
+                            "error": f"{type(exc).__name__}: {exc}"[:500],
+                        }
+                    )
+                    item.model_metadata = {
+                        **(item.model_metadata or {}),
+                        "scoring_errors": errors,
+                    }
+                    session.commit()
+                    if item.scoring_attempts >= max_attempts:
+                        logger.warning(
+                            "Item %s exhausted scoring attempts (%d/%d)",
+                            item.id,
+                            item.scoring_attempts,
+                            max_attempts,
+                        )
+                except Exception:  # noqa: BLE001 - recording the failure must not itself break isolation
+                    logger.exception(
+                        "Failed to record scoring failure bookkeeping for item %s", item.id
+                    )
+                    session.rollback()
+                logger.exception("Committing scoring result failed for item %s", item.id)
+                failed += 1
+                continue
     return ScoringJobResult(scored=scored, failed=failed)

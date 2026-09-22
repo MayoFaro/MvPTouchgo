@@ -298,6 +298,56 @@ async def test_score_pending_items_survives_a_commit_failure_while_recording_a_f
 
 
 @pytest.mark.asyncio
+async def test_score_pending_items_isolates_a_commit_failure_on_the_success_path(
+    db_session, make_source, monkeypatch
+):
+    """The success-path commit (persisting a scored item's fields) is itself a DB
+    write that can fail. It must not escape and abort the rest of the batch, and
+    the failing item's attempt counter must still be incremented — the same
+    isolation guarantee that already applies to score_item() failures."""
+    failing_item = _scored_pending_item(
+        db_session,
+        make_source,
+        source_id="flightglobal",
+        original_title="Failing item title",
+        original_text="Failing item body",
+    )
+    ok_item = _scored_pending_item(
+        db_session,
+        make_source,
+        source_id="reuters",
+        original_title="OK item title",
+        original_text="OK item body",
+    )
+
+    async def fake_score_item(title, text, source_type, client=None):
+        return _valid_result()
+
+    monkeypatch.setattr(job_module, "score_item", fake_score_item)
+
+    original_commit = db_session.commit
+    calls = {"n": 0}
+
+    def flaky_commit():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("simulated commit failure while persisting the score")
+        return original_commit()
+
+    monkeypatch.setattr(db_session, "commit", flaky_commit)
+
+    result = await score_pending_items(db_session, batch_size=10, max_attempts=5)
+
+    assert result.scored == 1
+    assert result.failed == 1
+    db_session.expire_all()
+    stored_failing = db_session.get(NewsItem, failing_item.id)
+    assert stored_failing.touchgo_interest is None
+    assert stored_failing.scoring_attempts == 1
+    assert db_session.get(NewsItem, ok_item.id).touchgo_interest == 8
+
+
+@pytest.mark.asyncio
 async def test_score_pending_items_stops_retrying_once_max_attempts_reached(
     db_session, make_source, monkeypatch
 ):

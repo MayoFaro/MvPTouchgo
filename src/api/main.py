@@ -2,18 +2,22 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.api.schemas import NewsItemOut
+from src.api.view_helpers import format_relative_time
 from src.classification.prompt import CATEGORIES
 from src.collectors.sources_config import load_sources_config
 from src.config import get_settings
 from src.db.models import NewsItem
 from src.db.repository import sync_sources
 from src.db.session import SessionLocal, get_session
-from src.review.schemas import FeedbackIn
+from src.review.schemas import FeedbackIn, REJECT_REASONS
 from src.review.service import ItemNotFoundError, submit_feedback
 from src.scheduler import add_classification_job, add_scoring_job, build_scheduler
 from src.scoring.prompt import PRIORITIES
@@ -50,6 +54,10 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Touch-Go News", lifespan=lifespan)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
+templates.env.filters["relative_time"] = format_relative_time
 
 _VIEW_TO_PRIORITY = {
     "a_voir": "A",
@@ -97,6 +105,32 @@ def _filtered_items(
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/", response_class=HTMLResponse)
+def review_page(
+    request: Request,
+    priority: str | None = None,
+    category: str | None = None,
+    since: str | None = None,
+    view: str | None = None,
+    session: Session = Depends(get_session),
+):
+    items = _filtered_items(session, priority, category, since, view)
+    return templates.TemplateResponse(
+        request,
+        "review.html",
+        {
+            "items": items,
+            "priorities": PRIORITIES,
+            "categories": CATEGORIES,
+            "reject_reasons": REJECT_REASONS,
+            "current_priority": priority,
+            "current_category": category,
+            "current_since": since,
+            "current_view": view,
+        },
+    )
 
 
 @app.get("/items", response_model=list[NewsItemOut])

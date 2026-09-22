@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Touch-Go News — Revue</title>
+  <link rel="stylesheet" href="/static/review.css">
+</head>
+<body>
+  <h1>Touch-Go News</h1>
+
+  <nav class="views">
+    <a href="/?view=a_voir">À voir</a>
+    <a href="/?view=a_surveiller">À surveiller</a>
+    <a href="/?view=faible_priorite">Faible priorité</a>
+    <a href="/">Toutes</a>
+  </nav>
+
+  <form method="get" action="/" class="filters">
+    <select name="priority" onchange="this.form.submit()">
+      <option value="">Toutes priorités</option>
+      {% for p in priorities %}
+      <option value="{{ p }}" {% if current_priority == p %}selected{% endif %}>{{ p }}</option>
+      {% endfor %}
+    </select>
+    <select name="category" onchange="this.form.submit()">
+      <option value="">Toutes catégories</option>
+      {% for c in categories %}
+      <option value="{{ c }}" {% if current_category == c %}selected{% endif %}>{{ c }}</option>
+      {% endfor %}
+    </select>
+    <select name="since" onchange="this.form.submit()">
+      <option value="">Toute période</option>
+      <option value="24h" {% if current_since == "24h" %}selected{% endif %}>24 h</option>
+      <option value="3d" {% if current_since == "3d" %}selected{% endif %}>3 jours</option>
+      <option value="7d" {% if current_since == "7d" %}selected{% endif %}>7 jours</option>
+    </select>
+  </form>
+
+  <div class="items">
+    {% for item in items %}
+    <article class="card" data-item-id="{{ item.id }}">
+      <div class="badges">
+        <span class="badge priority-{{ item.priority }}">{{ item.priority or "—" }}</span>
+        <span class="badge category">{{ item.primary_category or "—" }}</span>
+        <span class="time">{{ item.detected_at | relative_time }}</span>
+      </div>
+      <h2><a href="{{ item.original_url }}" target="_blank" rel="noopener">{{ item.original_title }}</a></h2>
+      <p class="source">Source : {{ item.source_id }} — Langue : {{ item.language or "?" }}</p>
+      <dl class="scores">
+        <dt>Intérêt Touch-Go</dt><dd>{{ item.touchgo_interest if item.touchgo_interest is not none else "—" }}</dd>
+        <dt>Importance</dt><dd>{{ item.event_importance if item.event_importance is not none else "—" }}</dd>
+        <dt>Fiabilité</dt><dd>{{ item.source_confidence if item.source_confidence is not none else "—" }}</dd>
+        <dt>Urgence</dt><dd>{{ item.urgency if item.urgency is not none else "—" }}</dd>
+      </dl>
+      <p class="status">Statut : {{ item.verification_status or "—" }}{% if item.human_decision %} — traité : {{ item.human_decision }}{% endif %}</p>
+      <div class="actions">
+        <button data-decision="TRES_INTERESSANT" title="Très intéressant">🔥</button>
+        <button data-decision="INTERESSANT" title="Intéressant">👍</button>
+        <button data-decision="A_SUIVRE" title="À suivre">👀</button>
+        <button data-decision="REJETER" data-needs-reason="true" title="Rejeter">❌</button>
+        <button data-decision="NOUVELLE_CATEGORIE" data-needs-comment="true" title="Nouvelle catégorie">➕</button>
+      </div>
+      <div class="feedback-error" hidden></div>
+    </article>
+    {% else %}
+    <p>Aucun résultat.</p>
+    {% endfor %}
+  </div>
+
+  <script>
+    window.REJECT_REASONS = {{ reject_reasons | tojson }};
+  </script>
+  <script src="/static/review.js"></script>
+</body>
+</html>

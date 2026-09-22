@@ -1,0 +1,14 @@
+body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+nav.views a, form.filters select { margin-right: 0.5rem; }
+.card { border: 1px solid #ccc; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
+.badges { display: flex; gap: 0.5rem; align-items: center; font-size: 0.85rem; }
+.badge { padding: 0.1rem 0.5rem; border-radius: 4px; background: #eee; }
+.badge.priority-A { background: #c8e6c9; }
+.badge.priority-B { background: #fff9c4; }
+.badge.priority-C { background: #eeeeee; }
+.time { color: #777; margin-left: auto; }
+.scores { display: flex; gap: 1rem; font-size: 0.85rem; }
+.scores dt { font-weight: bold; }
+.scores dd { margin: 0; }
+.actions button { font-size: 1.2rem; margin-right: 0.3rem; cursor: pointer; }
+.feedback-error { color: #b00020; font-size: 0.85rem; margin-top: 0.5rem; }

@@ -11,7 +11,7 @@ from src.config import get_settings
 from src.db.models import NewsItem
 from src.db.repository import sync_sources
 from src.db.session import SessionLocal, get_session
-from src.scheduler import add_classification_job, build_scheduler
+from src.scheduler import add_classification_job, add_scoring_job, build_scheduler
 
 
 @asynccontextmanager
@@ -30,6 +30,13 @@ async def lifespan(app: FastAPI):
         batch_size=settings.classification_batch_size,
         interval_minutes=settings.classification_interval_minutes,
         max_attempts=settings.classification_max_attempts,
+    )
+    add_scoring_job(
+        scheduler,
+        SessionLocal,
+        batch_size=settings.scoring_batch_size,
+        interval_minutes=settings.scoring_interval_minutes,
+        max_attempts=settings.scoring_max_attempts,
     )
     scheduler.start()
     app.state.scheduler = scheduler

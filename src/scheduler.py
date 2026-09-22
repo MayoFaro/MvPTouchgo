@@ -8,6 +8,7 @@ from src.collectors.factory import build_collector
 from src.collectors.runner import run_collection
 from src.collectors.sources_config import SourceConfig
 from src.db.repository import update_source_run_status
+from src.scoring.job import score_pending_items
 
 logger = logging.getLogger(__name__)
 
@@ -71,5 +72,33 @@ async def _classify_job(session_factory, batch_size: int, max_attempts: int) -> 
         await classify_pending_items(session, batch_size, max_attempts)
     except Exception:  # noqa: BLE001 - the classification job must never crash the scheduler
         logger.exception("Classification job failed")
+    finally:
+        session.close()
+
+
+def add_scoring_job(
+    scheduler: AsyncIOScheduler,
+    session_factory,
+    batch_size: int,
+    interval_minutes: int,
+    max_attempts: int,
+) -> None:
+    scheduler.add_job(
+        _score_job,
+        "interval",
+        minutes=interval_minutes,
+        id="scoring",
+        args=[session_factory, batch_size, max_attempts],
+        # Fire once right away instead of waiting a full poll interval.
+        next_run_time=datetime.now(timezone.utc),
+    )
+
+
+async def _score_job(session_factory, batch_size: int, max_attempts: int) -> None:
+    session = session_factory()
+    try:
+        await score_pending_items(session, batch_size, max_attempts)
+    except Exception:  # noqa: BLE001 - the scoring job must never crash the scheduler
+        logger.exception("Scoring job failed")
     finally:
         session.close()

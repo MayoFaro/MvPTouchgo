@@ -7,10 +7,19 @@ import respx
 
 import src.classification.job as job_module
 import src.scheduler as scheduler_module
+import src.scoring.job as scoring_job_module
 from src.classification.client import ClassificationResult
 from src.collectors.sources_config import SourceConfig
 from src.db.models import NewsItem, NewsSource
-from src.scheduler import _classify_job, _run_source_job, add_classification_job, build_scheduler
+from src.scheduler import (
+    _classify_job,
+    _run_source_job,
+    _score_job,
+    add_classification_job,
+    add_scoring_job,
+    build_scheduler,
+)
+from src.scoring.client import ScoringResult
 
 FEED = (Path(__file__).parent / "fixtures" / "sample_feed.xml").read_text()
 
@@ -155,5 +164,85 @@ async def test_classify_job_passes_max_attempts_through_to_classify_pending_item
     monkeypatch.setattr(scheduler_module, "classify_pending_items", spy_classify_pending_items)
 
     await _classify_job(session_factory=lambda: db_session, batch_size=7, max_attempts=2)
+
+    assert received == {"batch_size": 7, "max_attempts": 2}
+
+
+def test_add_scoring_job_registers_a_job_with_the_configured_interval():
+    scheduler = build_scheduler([], session_factory=lambda: None)
+
+    add_scoring_job(
+        scheduler,
+        session_factory=lambda: None,
+        batch_size=20,
+        interval_minutes=3,
+        max_attempts=5,
+    )
+
+    job = scheduler.get_job("scoring")
+    assert job is not None
+    assert job.trigger.interval.total_seconds() == 3 * 60
+    assert job.next_run_time is not None
+    assert job.next_run_time <= datetime.now(timezone.utc) + timedelta(seconds=5)
+
+
+@pytest.mark.asyncio
+async def test_score_job_runs_a_full_scoring_cycle(db_session, make_source, monkeypatch):
+    make_source(source_id="flightglobal")
+    item = NewsItem(
+        source_id="flightglobal",
+        source_item_id="1",
+        canonical_url="https://example.com/a",
+        original_url="https://example.com/a",
+        original_title="Airbus unveils new variant",
+        original_text="Body",
+        primary_category="COMMERCIAL",
+    )
+    db_session.add(item)
+    db_session.commit()
+
+    async def fake_score_item(title, text, source_type, client=None):
+        return ScoringResult(
+            touchgo_interest=8,
+            event_importance=7,
+            source_confidence=6,
+            urgency=5,
+            priority="A",
+            reasoning="ok",
+        )
+
+    monkeypatch.setattr(scoring_job_module, "score_item", fake_score_item)
+
+    await _score_job(session_factory=lambda: db_session, batch_size=10, max_attempts=5)
+
+    stored = db_session.get(NewsItem, item.id)
+    assert stored.priority == "A"
+
+
+@pytest.mark.asyncio
+async def test_score_job_does_not_raise_on_unexpected_error(db_session, monkeypatch):
+    async def broken_score_pending_items(session, batch_size, max_attempts):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(scheduler_module, "score_pending_items", broken_score_pending_items)
+
+    # Must not raise out of the scheduled job.
+    await _score_job(session_factory=lambda: db_session, batch_size=10, max_attempts=5)
+
+
+@pytest.mark.asyncio
+async def test_score_job_passes_max_attempts_through_to_score_pending_items(
+    db_session, monkeypatch
+):
+    received = {}
+
+    async def spy_score_pending_items(session, batch_size, max_attempts):
+        received["batch_size"] = batch_size
+        received["max_attempts"] = max_attempts
+        return scoring_job_module.ScoringJobResult(scored=0, failed=0)
+
+    monkeypatch.setattr(scheduler_module, "score_pending_items", spy_score_pending_items)
+
+    await _score_job(session_factory=lambda: db_session, batch_size=7, max_attempts=2)
 
     assert received == {"batch_size": 7, "max_attempts": 2}

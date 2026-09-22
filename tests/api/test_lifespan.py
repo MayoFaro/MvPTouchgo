@@ -54,10 +54,10 @@ def test_lifespan_starts_app_syncs_sources_and_serves_requests(
     with TestClient(api_main.app) as client:
         assert client.get("/health").json() == {"status": "ok"}
         assert client.app.state.scheduler.running is True
-        # The only configured source is inactive, so the classification job
-        # (always registered) is the sole scheduled job.
+        # The only configured source is inactive, so the classification and
+        # scoring jobs (both always registered) are the only scheduled jobs.
         job_ids = {job.id for job in client.app.state.scheduler.get_jobs()}
-        assert job_ids == {"classification"}
+        assert job_ids == {"classification", "scoring"}
 
         with api_session_factory() as session:
             source = session.get(NewsSource, "disabled-source")

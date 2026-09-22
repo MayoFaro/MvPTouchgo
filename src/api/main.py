@@ -1,7 +1,7 @@
 # src/api/main.py
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,8 @@ from src.config import get_settings
 from src.db.models import NewsItem
 from src.db.repository import sync_sources
 from src.db.session import SessionLocal, get_session
+from src.review.schemas import FeedbackIn
+from src.review.service import ItemNotFoundError, submit_feedback
 from src.scheduler import add_classification_job, add_scoring_job, build_scheduler
 
 
@@ -57,3 +59,13 @@ def list_items(session: Session = Depends(get_session)) -> list[NewsItem]:
     return list(
         session.execute(select(NewsItem).order_by(NewsItem.detected_at.desc())).scalars()
     )
+
+
+@app.post("/items/{item_id}/feedback", response_model=NewsItemOut)
+def submit_item_feedback(
+    item_id: int, feedback: FeedbackIn, session: Session = Depends(get_session)
+) -> NewsItem:
+    try:
+        return submit_feedback(session, item_id, feedback)
+    except ItemNotFoundError:
+        raise HTTPException(status_code=404, detail="item not found") from None

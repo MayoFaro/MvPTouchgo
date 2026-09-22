@@ -32,6 +32,11 @@ def test_items_returns_persisted_items(db_session, make_source):
     stored.source_confidence = 6
     stored.urgency = 5
     stored.priority = "A"
+    stored.verification_status = "UNVERIFIED"
+    stored.human_decision = "TRES_INTERESSANT"
+    stored.human_reason = None
+    stored.human_comment = "Bon signal"
+    stored.reviewer_id = "cedric"
     db_session.commit()
 
     app.dependency_overrides[get_session] = lambda: db_session
@@ -55,4 +60,10 @@ def test_items_returns_persisted_items(db_session, make_source):
     assert body[0]["source_confidence"] == 6
     assert body[0]["urgency"] == 5
     assert body[0]["priority"] == "A"
+    assert body[0]["verification_status"] == "UNVERIFIED"
+    assert body[0]["human_decision"] == "TRES_INTERESSANT"
+    assert body[0]["human_reason"] is None
+    assert body[0]["human_comment"] == "Bon signal"
+    assert body[0]["reviewer_id"] == "cedric"
+    assert body[0]["reviewed_at"] is None
     assert body[0]["duplicate_of"] is None

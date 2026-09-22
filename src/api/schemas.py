@@ -24,4 +24,10 @@ class NewsItemOut(BaseModel):
     source_confidence: int | None
     urgency: int | None
     priority: str | None
+    verification_status: str | None
     duplicate_of: int | None
+    human_decision: str | None
+    human_reason: str | None
+    human_comment: str | None
+    reviewed_at: datetime | None
+    reviewer_id: str | None

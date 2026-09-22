@@ -81,10 +81,47 @@ async def classify_pending_items(
                 logger.exception("Classification failed for item %s", item.id)
                 failed += 1
                 continue
-            item.primary_category = result.primary_category
-            item.secondary_categories = result.secondary_categories
-            item.classification_confidence = result.classification_confidence
-            item.model_reason = result.reasoning
-            session.commit()
-            classified += 1
+            try:
+                item.primary_category = result.primary_category
+                item.secondary_categories = result.secondary_categories
+                item.classification_confidence = result.classification_confidence
+                item.model_reason = result.reasoning
+                session.commit()
+                classified += 1
+            except Exception as exc:  # noqa: BLE001 - a single item must never break the whole batch
+                # Persisting a successful classification is itself a DB write that can
+                # fail (constraint violation, transient connection error, ...). Roll
+                # back first so the session isn't left in "rollback required" state
+                # for the next iteration's commit.
+                session.rollback()
+                try:
+                    item.classification_attempts += 1
+                    errors = list((item.model_metadata or {}).get("classification_errors", []))
+                    errors.append(
+                        {
+                            "attempt": item.classification_attempts,
+                            "at": datetime.now(timezone.utc).isoformat(),
+                            "error": f"{type(exc).__name__}: {exc}"[:500],
+                        }
+                    )
+                    item.model_metadata = {
+                        **(item.model_metadata or {}),
+                        "classification_errors": errors,
+                    }
+                    session.commit()
+                    if item.classification_attempts >= max_attempts:
+                        logger.warning(
+                            "Item %s exhausted classification attempts (%d/%d)",
+                            item.id,
+                            item.classification_attempts,
+                            max_attempts,
+                        )
+                except Exception:  # noqa: BLE001 - recording the failure must not itself break isolation
+                    logger.exception(
+                        "Failed to record classification failure bookkeeping for item %s", item.id
+                    )
+                    session.rollback()
+                logger.exception("Committing classification result failed for item %s", item.id)
+                failed += 1
+                continue
     return ClassificationJobResult(classified=classified, failed=failed)

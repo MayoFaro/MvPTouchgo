@@ -273,6 +273,61 @@ async def test_classify_pending_items_survives_a_commit_failure_while_recording_
 
 
 @pytest.mark.asyncio
+async def test_classify_pending_items_isolates_a_commit_failure_on_the_success_path(
+    db_session, make_source, monkeypatch
+):
+    """The success-path commit (persisting a classified item's fields) is itself a
+    DB write that can fail. It must not escape and abort the rest of the batch, and
+    the failing item's attempt counter must still be incremented — the same
+    isolation guarantee that already applies to classify_item() failures."""
+    failing_item = _pending_item(
+        db_session,
+        make_source,
+        source_id="flightglobal",
+        original_title="Failing item title",
+        original_text="Failing item body",
+    )
+    ok_item = _pending_item(
+        db_session,
+        make_source,
+        source_id="reuters",
+        original_title="OK item title",
+        original_text="OK item body",
+    )
+
+    async def fake_classify_item(title, text, client=None):
+        return ClassificationResult(
+            primary_category="DIVERS",
+            secondary_categories=[],
+            classification_confidence=0.4,
+            reasoning="ok",
+        )
+
+    monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
+
+    original_commit = db_session.commit
+    calls = {"n": 0}
+
+    def flaky_commit():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("simulated commit failure while persisting the classification")
+        return original_commit()
+
+    monkeypatch.setattr(db_session, "commit", flaky_commit)
+
+    result = await classify_pending_items(db_session, batch_size=10, max_attempts=5)
+
+    assert result.classified == 1
+    assert result.failed == 1
+    db_session.expire_all()
+    stored_failing = db_session.get(NewsItem, failing_item.id)
+    assert stored_failing.primary_category is None
+    assert stored_failing.classification_attempts == 1
+    assert db_session.get(NewsItem, ok_item.id).primary_category == "DIVERS"
+
+
+@pytest.mark.asyncio
 async def test_classify_pending_items_stops_retrying_once_max_attempts_reached(
     db_session, make_source, monkeypatch
 ):

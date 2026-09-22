@@ -257,6 +257,33 @@ def test_items_rejects_an_invalid_view(db_session):
     assert response.status_code == 422
 
 
+def test_items_treats_empty_string_filters_as_absent(db_session, make_source):
+    make_source(source_id="flightglobal")
+    db_session.add(
+        NewsItem(
+            source_id="flightglobal",
+            source_item_id="1",
+            canonical_url="https://example.com/1",
+            original_url="https://example.com/1",
+            original_title="Title",
+            original_text="Body",
+            priority="A",
+        )
+    )
+    db_session.commit()
+
+    app.dependency_overrides[get_session] = lambda: db_session
+    try:
+        response = TestClient(app).get(
+            "/items", params={"priority": "", "category": "", "since": ""}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+
+
 def test_items_with_null_priority_are_excluded_from_every_view(db_session, make_source):
     make_source(source_id="flightglobal")
     db_session.add(

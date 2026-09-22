@@ -79,6 +79,11 @@ def _filtered_items(
     since: str | None,
     view: str | None,
 ) -> list[NewsItem]:
+    priority = priority or None
+    category = category or None
+    since = since or None
+    view = view or None
+
     if priority is not None and priority not in PRIORITIES:
         raise HTTPException(status_code=422, detail=f"invalid priority: {priority!r}")
     if category is not None and category not in CATEGORIES:
@@ -116,8 +121,14 @@ def review_page(
     view: str | None = None,
     session: Session = Depends(get_session),
 ):
-    items = _filtered_items(session, priority, category, since, view)
-    return templates.TemplateResponse(
+    error_message = None
+    try:
+        items = _filtered_items(session, priority, category, since, view)
+    except HTTPException as exc:
+        items = []
+        error_message = str(exc.detail)
+
+    response = templates.TemplateResponse(
         request,
         "review.html",
         {
@@ -129,8 +140,12 @@ def review_page(
             "current_category": category,
             "current_since": since,
             "current_view": view,
+            "error_message": error_message,
         },
     )
+    if error_message is not None:
+        response.status_code = 422
+    return response
 
 
 @app.get("/items", response_model=list[NewsItemOut])

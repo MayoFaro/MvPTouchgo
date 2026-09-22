@@ -50,3 +50,27 @@ def test_review_page_rejects_an_invalid_priority(db_session):
         app.dependency_overrides.clear()
 
     assert response.status_code == 422
+
+
+def test_review_page_treats_empty_string_filters_as_absent(db_session):
+    app.dependency_overrides[get_session] = lambda: db_session
+    try:
+        response = TestClient(app).get(
+            "/", params={"priority": "", "category": "", "since": ""}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+
+
+def test_review_page_shows_an_inline_error_for_an_invalid_filter(db_session):
+    app.dependency_overrides[get_session] = lambda: db_session
+    try:
+        response = TestClient(app).get("/", params={"priority": "NOTAREALPRIORITY"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert "text/html" in response.headers["content-type"]
+    assert "invalid priority" in response.text

@@ -12,3 +12,4 @@ nav.views a, form.filters select { margin-right: 0.5rem; }
 .scores dd { margin: 0; }
 .actions button { font-size: 1.2rem; margin-right: 0.3rem; cursor: pointer; }
 .feedback-error { color: #b00020; font-size: 0.85rem; margin-top: 0.5rem; }
+.page-error { color: #b00020; font-weight: bold; margin: 1rem 0; }

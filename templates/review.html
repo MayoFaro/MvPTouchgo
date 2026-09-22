@@ -8,6 +8,10 @@
 <body>
   <h1>Touch-Go News</h1>
 
+  {% if error_message %}
+  <p class="page-error">{{ error_message }}</p>
+  {% endif %}
+
   <nav class="views">
     <a href="/?view=a_voir">À voir</a>
     <a href="/?view=a_surveiller">À surveiller</a>
@@ -16,6 +20,7 @@
   </nav>
 
   <form method="get" action="/" class="filters">
+    <input type="hidden" name="view" value="{{ current_view or '' }}">
     <select name="priority" onchange="this.form.submit()">
       <option value="">Toutes priorités</option>
       {% for p in priorities %}

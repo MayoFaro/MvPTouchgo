@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     classification_batch_size: int = 20
     classification_interval_minutes: int = 3
     classification_max_attempts: int = 5
+    scoring_batch_size: int = 20
+    scoring_interval_minutes: int = 3
+    scoring_max_attempts: int = 5
 
 
 @lru_cache

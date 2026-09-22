@@ -191,3 +191,30 @@ async def test_score_item_includes_source_type_in_the_prompt():
 
     sent_message = client.messages.last_kwargs["messages"][0]["content"]
     assert "community" in sent_message
+
+
+@pytest.mark.asyncio
+async def test_score_item_includes_examples_block_when_provided():
+    client = _FakeAnthropicClient(response=_valid_response())
+
+    await score_item(
+        "Some title",
+        "Some text",
+        "community",
+        examples="- Item priorité C donnée par le modèle ; retour humain : 🔥 (probablement sous-évalué).",
+        client=client,
+    )
+
+    sent_message = client.messages.last_kwargs["messages"][0]["content"]
+    assert "<exemples_feedback>" in sent_message
+    assert "probablement sous-évalué" in sent_message
+
+
+@pytest.mark.asyncio
+async def test_score_item_omits_examples_block_when_not_provided():
+    client = _FakeAnthropicClient(response=_valid_response())
+
+    await score_item("Some title", "Some text", "community", client=client)
+
+    sent_message = client.messages.last_kwargs["messages"][0]["content"]
+    assert "<exemples_feedback>" not in sent_message

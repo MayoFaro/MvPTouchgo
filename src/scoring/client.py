@@ -56,14 +56,21 @@ async def score_item(
     title: str,
     text: str,
     source_type: str,
+    examples: str = "",
     client: anthropic.AsyncAnthropic | None = None,
 ) -> ScoringResult:
     active_client = client or anthropic.AsyncAnthropic(api_key=get_settings().anthropic_api_key)
     # Bound the article body sent to the model: caps token cost and avoids risking
     # the context window on an arbitrarily long scraped article.
     truncated_text = text[:4000]
+    examples_block = (
+        "Exemples de feedback humain récent (indicatif, à pondérer avec jugement) :\n"
+        f"<exemples_feedback>\n{examples}\n</exemples_feedback>\n\n"
+        if examples
+        else ""
+    )
     user_message = (
-        f"Type de source : {source_type}\n\n"
+        f"{examples_block}Type de source : {source_type}\n\n"
         f"Titre : {title}\n\nTexte :\n<article>\n{truncated_text}\n</article>"
     )
 

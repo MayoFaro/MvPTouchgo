@@ -15,6 +15,10 @@ def test_system_prompt_states_low_confidence_never_lowers_interest_rule():
     assert "source_confidence" in SYSTEM_PROMPT
 
 
+def test_system_prompt_mentions_the_feedback_examples_marker():
+    assert "<exemples_feedback>" in SYSTEM_PROMPT
+
+
 def test_score_tool_schema_has_required_fields():
     assert SCORE_TOOL["name"] == "score_news_item"
     properties = SCORE_TOOL["input_schema"]["properties"]

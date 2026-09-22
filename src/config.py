@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     scoring_interval_minutes: int = 3
     scoring_max_attempts: int = 5
     default_reviewer_id: str = "reviewer"
+    adaptive_min_examples: int = 5
+    adaptive_max_examples: int = 5
 
 
 @lru_cache

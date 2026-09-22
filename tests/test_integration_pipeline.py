@@ -14,6 +14,9 @@ from src.db.models import NewsItem
 import src.classification.job as job_module
 from src.classification.client import ClassificationResult
 from src.classification.job import classify_pending_items
+import src.scoring.job as scoring_job_module
+from src.scoring.client import ScoringResult
+from src.scoring.job import score_pending_items
 
 FEED = (Path(__file__).parent / "fixtures" / "sample_feed.xml").read_text()
 
@@ -181,3 +184,69 @@ async def test_collected_items_get_classified_and_are_visible_via_api(
     assert len(body) == 2
     assert all(item["primary_category"] == "COMMERCIAL" for item in body)
     assert all(item["classification_confidence"] == 0.6 for item in body)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_collected_items_get_classified_scored_and_are_visible_via_api(
+    db_session, make_source, monkeypatch
+):
+    make_source(source_id="flightglobal", url="https://example.com/feed")
+    config = SourceConfig(
+        id="flightglobal",
+        name="FlightGlobal",
+        type="rss",
+        url="https://example.com/feed",
+        language="en",
+        source_type="press",
+        poll_interval_minutes=30,
+    )
+    respx.get("https://example.com/feed").mock(
+        return_value=httpx.Response(200, text=FEED, headers={"content-type": "application/rss+xml"})
+    )
+    collector = build_collector(config)
+    collection_result = await run_collection(db_session, config, collector)
+    assert collection_result.inserted == 2
+
+    async def fake_classify_item(title, text, client=None):
+        return ClassificationResult(
+            primary_category="COMMERCIAL",
+            secondary_categories=[],
+            classification_confidence=0.6,
+            reasoning="Test classification.",
+        )
+
+    monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
+
+    classification_result = await classify_pending_items(db_session, batch_size=10, max_attempts=5)
+    assert classification_result.classified == 2
+    assert classification_result.failed == 0
+
+    async def fake_score_item(title, text, source_type, client=None):
+        return ScoringResult(
+            touchgo_interest=8,
+            event_importance=7,
+            source_confidence=6,
+            urgency=5,
+            priority="A",
+            reasoning="Test scoring.",
+        )
+
+    monkeypatch.setattr(scoring_job_module, "score_item", fake_score_item)
+
+    scoring_result = await score_pending_items(db_session, batch_size=10, max_attempts=5)
+    assert scoring_result.scored == 2
+    assert scoring_result.failed == 0
+
+    app.dependency_overrides[get_session] = lambda: db_session
+    try:
+        response = TestClient(app).get("/items")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 2
+    assert all(item["primary_category"] == "COMMERCIAL" for item in body)
+    assert all(item["priority"] == "A" for item in body)
+    assert all(item["touchgo_interest"] == 8 for item in body)

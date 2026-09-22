@@ -17,6 +17,7 @@ from src.classification.job import classify_pending_items
 import src.scoring.job as scoring_job_module
 from src.scoring.client import ScoringResult
 from src.scoring.job import score_pending_items
+from src.config import get_settings
 
 FEED = (Path(__file__).parent / "fixtures" / "sample_feed.xml").read_text()
 
@@ -325,3 +326,100 @@ async def test_scored_items_can_receive_feedback_and_be_filtered_via_the_review_
         assert page_response.status_code == 200
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_feedback_examples_are_injected_into_the_next_classification_pass(
+    db_session, make_source, monkeypatch
+):
+    monkeypatch.setenv("ADAPTIVE_MIN_EXAMPLES", "1")
+    get_settings.cache_clear()
+    try:
+        make_source(source_id="flightglobal", url="https://example.com/feed")
+        make_source(source_id="reuters", url="https://reuters.example.com/feed")
+        flightglobal_config = SourceConfig(
+            id="flightglobal",
+            name="FlightGlobal",
+            type="rss",
+            url="https://example.com/feed",
+            language="en",
+            source_type="press",
+            poll_interval_minutes=30,
+        )
+        reuters_config = SourceConfig(
+            id="reuters",
+            name="Reuters",
+            type="rss",
+            url="https://reuters.example.com/feed",
+            language="en",
+            source_type="press",
+            poll_interval_minutes=30,
+        )
+        respx.get("https://example.com/feed").mock(
+            return_value=httpx.Response(
+                200, text=FEED, headers={"content-type": "application/rss+xml"}
+            )
+        )
+        respx.get("https://reuters.example.com/feed").mock(
+            return_value=httpx.Response(
+                200, text=SECOND_SOURCE_FEED, headers={"content-type": "application/rss+xml"}
+            )
+        )
+
+        first_collection = await run_collection(
+            db_session, flightglobal_config, build_collector(flightglobal_config)
+        )
+        assert first_collection.inserted == 2
+
+        async def fake_classify_item(title, text, examples="", client=None):
+            return ClassificationResult(
+                primary_category="COMMERCIAL",
+                secondary_categories=[],
+                classification_confidence=0.6,
+                reasoning="Test classification.",
+            )
+
+        monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
+        first_classification = await classify_pending_items(
+            db_session, batch_size=10, max_attempts=5
+        )
+        assert first_classification.classified == 2
+
+        app.dependency_overrides[get_session] = lambda: db_session
+        try:
+            client = TestClient(app)
+            first_item_id = client.get("/items").json()[0]["id"]
+            feedback_response = client.post(
+                f"/items/{first_item_id}/feedback",
+                json={"decision": "REJETER", "reason": "hors_perimetre"},
+            )
+            assert feedback_response.status_code == 200
+        finally:
+            app.dependency_overrides.clear()
+
+        second_collection = await run_collection(
+            db_session, reuters_config, build_collector(reuters_config)
+        )
+        assert second_collection.inserted == 1
+
+        received_examples = []
+
+        async def spy_classify_item(title, text, examples="", client=None):
+            received_examples.append(examples)
+            return ClassificationResult(
+                primary_category="DIVERS",
+                secondary_categories=[],
+                classification_confidence=0.5,
+                reasoning="Second pass.",
+            )
+
+        monkeypatch.setattr(job_module, "classify_item", spy_classify_item)
+        second_classification = await classify_pending_items(
+            db_session, batch_size=10, max_attempts=5
+        )
+        assert second_classification.classified == 1
+        assert len(received_examples) == 1
+        assert "hors périmètre Touch-Go" in received_examples[0]
+    finally:
+        get_settings.cache_clear()

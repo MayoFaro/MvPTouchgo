@@ -73,6 +73,9 @@ class NewsItem(Base):
     event_importance: Mapped[int | None] = mapped_column(Integer, nullable=True)
     source_confidence: Mapped[int | None] = mapped_column(Integer, nullable=True)
     urgency: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    scoring_attempts: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
 
     priority: Mapped[str | None] = mapped_column(String, nullable=True)
     verification_status: Mapped[str | None] = mapped_column(String, nullable=True)

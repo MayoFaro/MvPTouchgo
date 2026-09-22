@@ -88,3 +88,20 @@ def test_classification_attempts_defaults_to_zero(db_session, make_source):
 
     fetched = db_session.query(NewsItem).filter_by(source_item_id="attempts-test").one()
     assert fetched.classification_attempts == 0
+
+
+def test_scoring_attempts_defaults_to_zero(db_session, make_source):
+    make_source(source_id="flightglobal")
+    item = NewsItem(
+        source_id="flightglobal",
+        source_item_id="scoring-attempts-test",
+        canonical_url="https://example.com/a",
+        original_url="https://example.com/a",
+        original_title="Title",
+        original_text="Body",
+    )
+    db_session.add(item)
+    db_session.commit()
+
+    fetched = db_session.query(NewsItem).filter_by(source_item_id="scoring-attempts-test").one()
+    assert fetched.scoring_attempts == 0

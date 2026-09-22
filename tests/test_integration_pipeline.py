@@ -250,3 +250,78 @@ async def test_collected_items_get_classified_scored_and_are_visible_via_api(
     assert all(item["primary_category"] == "COMMERCIAL" for item in body)
     assert all(item["priority"] == "A" for item in body)
     assert all(item["touchgo_interest"] == 8 for item in body)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_scored_items_can_receive_feedback_and_be_filtered_via_the_review_endpoints(
+    db_session, make_source, monkeypatch
+):
+    make_source(source_id="flightglobal", url="https://example.com/feed")
+    config = SourceConfig(
+        id="flightglobal",
+        name="FlightGlobal",
+        type="rss",
+        url="https://example.com/feed",
+        language="en",
+        source_type="press",
+        poll_interval_minutes=30,
+    )
+    respx.get("https://example.com/feed").mock(
+        return_value=httpx.Response(200, text=FEED, headers={"content-type": "application/rss+xml"})
+    )
+    collector = build_collector(config)
+    collection_result = await run_collection(db_session, config, collector)
+    assert collection_result.inserted == 2
+
+    async def fake_classify_item(title, text, client=None):
+        return ClassificationResult(
+            primary_category="COMMERCIAL",
+            secondary_categories=[],
+            classification_confidence=0.6,
+            reasoning="Test classification.",
+        )
+
+    monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
+    classification_result = await classify_pending_items(db_session, batch_size=10, max_attempts=5)
+    assert classification_result.classified == 2
+
+    async def fake_score_item(title, text, source_type, client=None):
+        return ScoringResult(
+            touchgo_interest=8,
+            event_importance=7,
+            source_confidence=6,
+            urgency=5,
+            priority="A",
+            reasoning="Test scoring.",
+        )
+
+    monkeypatch.setattr(scoring_job_module, "score_item", fake_score_item)
+    scoring_result = await score_pending_items(db_session, batch_size=10, max_attempts=5)
+    assert scoring_result.scored == 2
+
+    app.dependency_overrides[get_session] = lambda: db_session
+    try:
+        client = TestClient(app)
+
+        view_response = client.get("/items", params={"view": "a_voir"})
+        assert view_response.status_code == 200
+        items = view_response.json()
+        assert len(items) == 2
+
+        target_id = items[0]["id"]
+        feedback_response = client.post(
+            f"/items/{target_id}/feedback", json={"decision": "TRES_INTERESSANT"}
+        )
+        assert feedback_response.status_code == 200
+        assert feedback_response.json()["human_decision"] == "TRES_INTERESSANT"
+        assert feedback_response.json()["reviewer_id"]
+
+        after_feedback = client.get("/items", params={"view": "a_voir"}).json()
+        treated = next(item for item in after_feedback if item["id"] == target_id)
+        assert treated["human_decision"] == "TRES_INTERESSANT"
+
+        page_response = client.get("/", params={"view": "a_voir"})
+        assert page_response.status_code == 200
+    finally:
+        app.dependency_overrides.clear()

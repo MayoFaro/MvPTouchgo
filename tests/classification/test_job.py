@@ -35,7 +35,7 @@ async def test_classify_pending_items_returns_zero_when_nothing_pending(db_sessi
 async def test_classify_pending_items_updates_matched_items(db_session, make_source, monkeypatch):
     item = _pending_item(db_session, make_source, source_id="flightglobal")
 
-    async def fake_classify_item(title, text, client=None):
+    async def fake_classify_item(title, text, examples="", client=None):
         return ClassificationResult(
             primary_category="MILITAIRE",
             secondary_categories=["ACCIDENT_INCIDENT"],
@@ -62,7 +62,7 @@ async def test_classify_pending_items_skips_already_classified_items(
 ):
     _pending_item(db_session, make_source, source_id="flightglobal", primary_category="COMMERCIAL")
 
-    async def fake_classify_item(title, text, client=None):
+    async def fake_classify_item(title, text, examples="", client=None):
         raise AssertionError("should not be called for an already-classified item")
 
     monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
@@ -92,7 +92,7 @@ async def test_classify_pending_items_isolates_a_single_item_failure(
         original_text="OK item body",
     )
 
-    async def fake_classify_item(title, text, client=None):
+    async def fake_classify_item(title, text, examples="", client=None):
         if title == "Failing item title":
             raise ClassificationError("boom")
         return ClassificationResult(
@@ -134,7 +134,7 @@ async def test_classify_pending_items_isolates_a_non_classification_error(
         original_text="OK item body",
     )
 
-    async def fake_classify_item(title, text, client=None):
+    async def fake_classify_item(title, text, examples="", client=None):
         if title == "Failing item title":
             raise RuntimeError("unexpected bug")
         return ClassificationResult(
@@ -160,7 +160,7 @@ async def test_classify_pending_items_respects_batch_size(db_session, make_sourc
     _pending_item(db_session, make_source, source_id="flightglobal-2", source_item_id="2")
     _pending_item(db_session, make_source, source_id="flightglobal-3", source_item_id="3")
 
-    async def fake_classify_item(title, text, client=None):
+    async def fake_classify_item(title, text, examples="", client=None):
         return ClassificationResult(
             primary_category="DIVERS",
             secondary_categories=[],
@@ -184,7 +184,7 @@ async def test_classify_pending_items_excludes_items_that_reached_max_attempts(
         db_session, make_source, source_id="flightglobal", classification_attempts=3
     )
 
-    async def fake_classify_item(title, text, client=None):
+    async def fake_classify_item(title, text, examples="", client=None):
         raise AssertionError("should not be called for an item that reached max_attempts")
 
     monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
@@ -202,7 +202,7 @@ async def test_classify_pending_items_increments_attempts_and_logs_reason_on_fai
 ):
     item = _pending_item(db_session, make_source, source_id="flightglobal")
 
-    async def fake_classify_item(title, text, client=None):
+    async def fake_classify_item(title, text, examples="", client=None):
         raise ClassificationError("boom")
 
     monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
@@ -242,7 +242,7 @@ async def test_classify_pending_items_survives_a_commit_failure_while_recording_
         original_text="OK item body",
     )
 
-    async def fake_classify_item(title, text, client=None):
+    async def fake_classify_item(title, text, examples="", client=None):
         if title == "Failing item title":
             raise ClassificationError("boom")
         return ClassificationResult(
@@ -295,7 +295,7 @@ async def test_classify_pending_items_isolates_a_commit_failure_on_the_success_p
         original_text="OK item body",
     )
 
-    async def fake_classify_item(title, text, client=None):
+    async def fake_classify_item(title, text, examples="", client=None):
         return ClassificationResult(
             primary_category="DIVERS",
             secondary_categories=[],
@@ -333,7 +333,7 @@ async def test_classify_pending_items_stops_retrying_once_max_attempts_reached(
 ):
     item = _pending_item(db_session, make_source, source_id="flightglobal")
 
-    async def always_fails(title, text, client=None):
+    async def always_fails(title, text, examples="", client=None):
         raise ClassificationError("boom")
 
     monkeypatch.setattr(job_module, "classify_item", always_fails)
@@ -351,7 +351,7 @@ async def test_classify_pending_items_stops_retrying_once_max_attempts_reached(
     assert stored.classification_attempts == max_attempts
     assert len(stored.model_metadata["classification_errors"]) == max_attempts
 
-    async def should_not_be_called(title, text, client=None):
+    async def should_not_be_called(title, text, examples="", client=None):
         raise AssertionError("item exhausted its attempts and must not be retried")
 
     monkeypatch.setattr(job_module, "classify_item", should_not_be_called)
@@ -363,6 +363,62 @@ async def test_classify_pending_items_stops_retrying_once_max_attempts_reached(
 
 
 @pytest.mark.asyncio
+async def test_classify_pending_items_computes_examples_once_per_batch_and_passes_them_through(
+    db_session, make_source, monkeypatch
+):
+    _pending_item(db_session, make_source, source_id="flightglobal", source_item_id="1")
+    _pending_item(db_session, make_source, source_id="reuters", source_item_id="2")
+
+    calls = {"build": 0}
+
+    def fake_build_examples(session, min_examples, max_examples):
+        calls["build"] += 1
+        return "- Item classé COMMERCIAL par le modèle ; retour humain : hors périmètre Touch-Go."
+
+    monkeypatch.setattr(job_module, "build_classification_examples", fake_build_examples)
+
+    received_examples = []
+
+    async def fake_classify_item(title, text, examples="", client=None):
+        received_examples.append(examples)
+        return ClassificationResult(
+            primary_category="COMMERCIAL",
+            secondary_categories=[],
+            classification_confidence=0.6,
+            reasoning="ok",
+        )
+
+    monkeypatch.setattr(job_module, "classify_item", fake_classify_item)
+
+    result = await classify_pending_items(db_session, batch_size=10, max_attempts=5)
+
+    assert result.classified == 2
+    assert calls["build"] == 1
+    assert received_examples == [
+        "- Item classé COMMERCIAL par le modèle ; retour humain : hors périmètre Touch-Go.",
+        "- Item classé COMMERCIAL par le modèle ; retour humain : hors périmètre Touch-Go.",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_classify_pending_items_skips_building_examples_when_nothing_pending(
+    db_session, monkeypatch
+):
+    calls = {"build": 0}
+
+    def fake_build_examples(session, min_examples, max_examples):
+        calls["build"] += 1
+        return ""
+
+    monkeypatch.setattr(job_module, "build_classification_examples", fake_build_examples)
+
+    result = await classify_pending_items(db_session, batch_size=10, max_attempts=5)
+
+    assert result.classified == 0
+    assert calls["build"] == 0
+
+
+@pytest.mark.asyncio
 async def test_classify_pending_items_preserves_existing_model_metadata_keys_on_failure(
     db_session, make_source, monkeypatch
 ):
@@ -370,7 +426,7 @@ async def test_classify_pending_items_preserves_existing_model_metadata_keys_on_
         db_session, make_source, source_id="flightglobal", model_metadata={"foo": "bar"}
     )
 
-    async def fake_classify_item(title, text, client=None):
+    async def fake_classify_item(title, text, examples="", client=None):
         raise ClassificationError("boom")
 
     monkeypatch.setattr(job_module, "classify_item", fake_classify_item)

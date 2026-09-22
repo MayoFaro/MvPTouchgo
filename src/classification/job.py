@@ -6,6 +6,7 @@ import anthropic
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from src.adaptive.examples import build_classification_examples
 from src.classification.client import classify_item
 from src.config import get_settings
 from src.db.models import NewsItem
@@ -42,10 +43,17 @@ async def classify_pending_items(
     if not pending:
         return ClassificationJobResult(classified=classified, failed=failed)
 
+    settings = get_settings()
+    examples = build_classification_examples(
+        session, settings.adaptive_min_examples, settings.adaptive_max_examples
+    )
+
     async with anthropic.AsyncAnthropic(api_key=get_settings().anthropic_api_key) as client:
         for item in pending:
             try:
-                result = await classify_item(item.original_title, item.original_text, client=client)
+                result = await classify_item(
+                    item.original_title, item.original_text, examples=examples, client=client
+                )
             except Exception as exc:  # noqa: BLE001 - a single item must never break the whole batch
                 # A failure mid-item (classification or a DB error from a prior
                 # commit) can leave the session in "rollback required" state:

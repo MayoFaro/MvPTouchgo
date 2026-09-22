@@ -123,7 +123,7 @@ async def test_classify_job_runs_a_full_classification_cycle(db_session, make_so
     db_session.add(item)
     db_session.commit()
 
-    async def fake_classify_item(title, text, client=None):
+    async def fake_classify_item(title, text, examples="", client=None):
         return ClassificationResult(
             primary_category="COMMERCIAL",
             secondary_categories=[],

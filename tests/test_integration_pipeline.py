@@ -159,7 +159,7 @@ async def test_collected_items_get_classified_and_are_visible_via_api(
     collection_result = await run_collection(db_session, config, collector)
     assert collection_result.inserted == 2
 
-    async def fake_classify_item(title, text, client=None):
+    async def fake_classify_item(title, text, examples="", client=None):
         return ClassificationResult(
             primary_category="COMMERCIAL",
             secondary_categories=[],
@@ -208,7 +208,7 @@ async def test_collected_items_get_classified_scored_and_are_visible_via_api(
     collection_result = await run_collection(db_session, config, collector)
     assert collection_result.inserted == 2
 
-    async def fake_classify_item(title, text, client=None):
+    async def fake_classify_item(title, text, examples="", client=None):
         return ClassificationResult(
             primary_category="COMMERCIAL",
             secondary_categories=[],
@@ -274,7 +274,7 @@ async def test_scored_items_can_receive_feedback_and_be_filtered_via_the_review_
     collection_result = await run_collection(db_session, config, collector)
     assert collection_result.inserted == 2
 
-    async def fake_classify_item(title, text, client=None):
+    async def fake_classify_item(title, text, examples="", client=None):
         return ClassificationResult(
             primary_category="COMMERCIAL",
             secondary_categories=[],

@@ -3,10 +3,15 @@ from sqlalchemy.orm import Session
 
 from src.db.models import NewsFeedback
 
-_UNDERESTIMATED_LABELS = {
+_SCORING_DECISION_LABELS = {
     "TRES_INTERESSANT": "🔥 (probablement sous-évalué)",
     "INTERESSANT": "👍 (probablement sous-évalué)",
+    "REJETER": "❌ rejeté (probablement surévalué)",
 }
+
+
+def _sanitize_comment(comment: str) -> str:
+    return comment.replace("<", "").replace(">", "").replace("\n", " ").replace("\r", " ")
 
 
 def build_classification_examples(session: Session, min_examples: int, max_examples: int) -> str:
@@ -14,11 +19,14 @@ def build_classification_examples(session: Session, min_examples: int, max_examp
         session.execute(
             select(NewsFeedback)
             .where(
-                (NewsFeedback.decision == "NOUVELLE_CATEGORIE")
-                | (
-                    (NewsFeedback.decision == "REJETER")
-                    & (NewsFeedback.reason == "hors_perimetre")
+                (
+                    (NewsFeedback.decision == "NOUVELLE_CATEGORIE")
+                    | (
+                        (NewsFeedback.decision == "REJETER")
+                        & (NewsFeedback.reason == "hors_perimetre")
+                    )
                 )
+                & NewsFeedback.previous_category.is_not(None)
             )
             .order_by(NewsFeedback.created_at.desc())
             .limit(max_examples)
@@ -35,7 +43,7 @@ def build_classification_examples(session: Session, min_examples: int, max_examp
         if feedback.decision == "NOUVELLE_CATEGORIE":
             lines.append(
                 f"- Item classé {feedback.previous_category} par le modèle ; retour humain : "
-                f'proposer une nouvelle catégorie ("{feedback.comment}").'
+                f'proposer une nouvelle catégorie ("{_sanitize_comment(feedback.comment)}").'
             )
         else:
             lines.append(
@@ -49,7 +57,10 @@ def build_scoring_examples(session: Session, min_examples: int, max_examples: in
     rows = (
         session.execute(
             select(NewsFeedback)
-            .where(NewsFeedback.decision.in_(["TRES_INTERESSANT", "INTERESSANT", "REJETER"]))
+            .where(
+                NewsFeedback.decision.in_(["TRES_INTERESSANT", "INTERESSANT", "REJETER"])
+                & NewsFeedback.previous_priority.is_not(None)
+            )
             .order_by(NewsFeedback.created_at.desc())
             .limit(max_examples)
         )
@@ -62,9 +73,7 @@ def build_scoring_examples(session: Session, min_examples: int, max_examples: in
 
     lines = []
     for feedback in rows:
-        label = _UNDERESTIMATED_LABELS.get(
-            feedback.decision, "❌ rejeté (probablement surévalué)"
-        )
+        label = _SCORING_DECISION_LABELS[feedback.decision]
         lines.append(
             f"- Item priorité {feedback.previous_priority} donnée par le modèle ; retour "
             f"humain : {label}."

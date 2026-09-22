@@ -43,10 +43,12 @@ async def score_pending_items(
 
     settings = get_settings()
     examples = build_scoring_examples(
-        session, settings.adaptive_min_examples, settings.adaptive_max_examples
+        session,
+        min_examples=settings.adaptive_min_examples,
+        max_examples=settings.adaptive_max_examples,
     )
 
-    async with anthropic.AsyncAnthropic(api_key=get_settings().anthropic_api_key) as client:
+    async with anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key) as client:
         for item, source_type in pending:
             try:
                 result = await score_item(

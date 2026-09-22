@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     scoring_batch_size: int = 20
     scoring_interval_minutes: int = 3
     scoring_max_attempts: int = 5
+    default_reviewer_id: str = "reviewer"
 
 
 @lru_cache

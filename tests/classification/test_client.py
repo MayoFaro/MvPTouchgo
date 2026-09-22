@@ -135,3 +135,29 @@ async def test_classify_item_truncates_long_article_text():
     sent_message = client.messages.last_kwargs["messages"][0]["content"]
     assert "x" * 4000 in sent_message
     assert "x" * 4001 not in sent_message
+
+
+@pytest.mark.asyncio
+async def test_classify_item_includes_examples_block_when_provided():
+    client = _FakeAnthropicClient(response=_valid_response())
+
+    await classify_item(
+        "Some title",
+        "Some text",
+        examples="- Item classé COMMERCIAL par le modèle ; retour humain : hors périmètre Touch-Go.",
+        client=client,
+    )
+
+    sent_message = client.messages.last_kwargs["messages"][0]["content"]
+    assert "<exemples_feedback>" in sent_message
+    assert "hors périmètre Touch-Go" in sent_message
+
+
+@pytest.mark.asyncio
+async def test_classify_item_omits_examples_block_when_not_provided():
+    client = _FakeAnthropicClient(response=_valid_response())
+
+    await classify_item("Some title", "Some text", client=client)
+
+    sent_message = client.messages.last_kwargs["messages"][0]["content"]
+    assert "<exemples_feedback>" not in sent_message

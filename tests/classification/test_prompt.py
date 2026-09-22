@@ -23,6 +23,10 @@ def test_system_prompt_states_the_divers_never_reject_rule():
     assert "JAMAIS" in SYSTEM_PROMPT.upper() or "JAMAIS" in SYSTEM_PROMPT
 
 
+def test_system_prompt_mentions_the_feedback_examples_marker():
+    assert "<exemples_feedback>" in SYSTEM_PROMPT
+
+
 def test_classify_tool_schema_has_required_fields():
     assert CLASSIFY_TOOL["name"] == "classify_news_item"
     properties = CLASSIFY_TOOL["input_schema"]["properties"]

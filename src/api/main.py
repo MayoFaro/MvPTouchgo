@@ -75,6 +75,10 @@ def _filtered_items(
         raise HTTPException(status_code=422, detail=f"invalid priority: {priority!r}")
     if category is not None and category not in CATEGORIES:
         raise HTTPException(status_code=422, detail=f"invalid category: {category!r}")
+    if since is not None and since not in _SINCE_TO_DELTA:
+        raise HTTPException(status_code=422, detail=f"invalid since: {since!r}")
+    if view is not None and view not in _VIEW_TO_PRIORITY:
+        raise HTTPException(status_code=422, detail=f"invalid view: {view!r}")
 
     effective_priority = priority or _VIEW_TO_PRIORITY.get(view)
 

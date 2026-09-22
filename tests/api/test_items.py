@@ -237,6 +237,26 @@ def test_items_rejects_an_invalid_category(db_session):
     assert response.status_code == 422
 
 
+def test_items_rejects_an_invalid_since(db_session):
+    app.dependency_overrides[get_session] = lambda: db_session
+    try:
+        response = TestClient(app).get("/items", params={"since": "1h"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+
+def test_items_rejects_an_invalid_view(db_session):
+    app.dependency_overrides[get_session] = lambda: db_session
+    try:
+        response = TestClient(app).get("/items", params={"view": "bogus"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+
 def test_items_with_null_priority_are_excluded_from_every_view(db_session, make_source):
     make_source(source_id="flightglobal")
     db_session.add(

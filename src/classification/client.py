@@ -2,7 +2,7 @@
 import asyncio
 import logging
 
-import anthropic
+import ollama
 from pydantic import BaseModel
 
 from src.classification.prompt import CATEGORIES, CLASSIFY_TOOL, SYSTEM_PROMPT
@@ -10,7 +10,6 @@ from src.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-MODEL = "claude-haiku-4-5-20251001"
 MAX_ATTEMPTS = 2
 RETRY_DELAY_SECONDS = 1
 
@@ -27,29 +26,31 @@ class ClassificationError(Exception):
 
 
 def parse_classification_response(response) -> ClassificationResult:
-    for block in response.content:
-        if getattr(block, "type", None) == "tool_use" and block.name == "classify_news_item":
-            data = block.input
-            primary = data.get("primary_category")
-            if primary not in CATEGORIES:
-                raise ValueError(f"invalid primary_category from model: {primary!r}")
-            secondary = [c for c in data.get("secondary_categories", []) if c in CATEGORIES]
-            return ClassificationResult(
-                primary_category=primary,
-                secondary_categories=secondary,
-                classification_confidence=float(data.get("classification_confidence", 0.0)),
-                reasoning=str(data.get("reasoning", "")),
-            )
-    raise ValueError("no tool_use block named classify_news_item in Claude response")
+    tool_calls = response.message.tool_calls
+    if tool_calls:
+        for tool_call in tool_calls:
+            if tool_call.function.name == "classify_news_item":
+                data = tool_call.function.arguments
+                primary = data.get("primary_category")
+                if primary not in CATEGORIES:
+                    raise ValueError(f"invalid primary_category from model: {primary!r}")
+                secondary = [c for c in data.get("secondary_categories", []) if c in CATEGORIES]
+                return ClassificationResult(
+                    primary_category=primary,
+                    secondary_categories=secondary,
+                    classification_confidence=float(data.get("classification_confidence", 0.0)),
+                    reasoning=str(data.get("reasoning", "")),
+                )
+    raise ValueError("no tool call named classify_news_item in Ollama response")
 
 
 async def classify_item(
     title: str,
     text: str,
     examples: str = "",
-    client: anthropic.AsyncAnthropic | None = None,
+    client: ollama.AsyncClient | None = None,
 ) -> ClassificationResult:
-    active_client = client or anthropic.AsyncAnthropic(api_key=get_settings().anthropic_api_key)
+    active_client = client or ollama.AsyncClient(host=get_settings().ollama_host)
     # Bound the article body sent to the model: caps token cost and avoids risking
     # the context window on an arbitrarily long scraped article.
     truncated_text = text[:4000]
@@ -66,13 +67,13 @@ async def classify_item(
     last_error: Exception | None = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            response = await active_client.messages.create(
-                model=MODEL,
-                max_tokens=512,
-                system=SYSTEM_PROMPT,
+            response = await active_client.chat(
+                model=get_settings().ollama_model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_message},
+                ],
                 tools=[CLASSIFY_TOOL],
-                tool_choice={"type": "tool", "name": "classify_news_item"},
-                messages=[{"role": "user", "content": user_message}],
             )
             return parse_classification_response(response)
         except Exception as exc:  # noqa: BLE001 - any failure takes the same retry/backoff path

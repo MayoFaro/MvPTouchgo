@@ -28,8 +28,8 @@ def test_system_prompt_mentions_the_feedback_examples_marker():
 
 
 def test_classify_tool_schema_has_required_fields():
-    assert CLASSIFY_TOOL["name"] == "classify_news_item"
-    properties = CLASSIFY_TOOL["input_schema"]["properties"]
+    assert CLASSIFY_TOOL["function"]["name"] == "classify_news_item"
+    properties = CLASSIFY_TOOL["function"]["parameters"]["properties"]
     assert set(properties) == {
         "primary_category",
         "secondary_categories",
@@ -38,7 +38,7 @@ def test_classify_tool_schema_has_required_fields():
     }
     assert properties["primary_category"]["enum"] == CATEGORIES
     assert properties["secondary_categories"]["items"]["enum"] == CATEGORIES
-    required = CLASSIFY_TOOL["input_schema"]["required"]
+    required = CLASSIFY_TOOL["function"]["parameters"]["required"]
     assert set(required) == {
         "primary_category",
         "secondary_categories",

@@ -75,40 +75,41 @@ militaire), choisis la plus spécifique comme catégorie principale et ajoute l'
 secondaire plutôt que de forcer un choix arbitraire."""
 
 CLASSIFY_TOOL = {
-    "name": "classify_news_item",
-    "description": (
-        "Classify an aviation news item into Touch-Go's editorial categories, per the system "
-        "prompt's rules."
-    ),
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "primary_category": {
-                "type": "string",
-                "enum": CATEGORIES,
-                "description": "The single best-fitting category.",
+    "type": "function",
+    "function": {
+        "name": "classify_news_item",
+        "description": (
+            "Classify an aviation news item into Touch-Go's editorial categories, per the system "
+            "prompt's rules."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "primary_category": {
+                    "type": "string",
+                    "enum": CATEGORIES,
+                    "description": "The single best-fitting category.",
+                },
+                "secondary_categories": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": CATEGORIES},
+                    "description": "Zero or more additional categories that also clearly apply.",
+                },
+                "classification_confidence": {
+                    "type": "number",
+                    "description": "Confidence in the primary_category choice, from 0.0 to 1.0.",
+                },
+                "reasoning": {
+                    "type": "string",
+                    "description": "One or two sentences explaining the choice, for human audit.",
+                },
             },
-            "secondary_categories": {
-                "type": "array",
-                "items": {"type": "string", "enum": CATEGORIES},
-                "description": "Zero or more additional categories that also clearly apply.",
-            },
-            "classification_confidence": {
-                "type": "number",
-                "minimum": 0.0,
-                "maximum": 1.0,
-                "description": "Confidence in the primary_category choice, from 0.0 to 1.0.",
-            },
-            "reasoning": {
-                "type": "string",
-                "description": "One or two sentences explaining the choice, for human audit.",
-            },
+            "required": [
+                "primary_category",
+                "secondary_categories",
+                "classification_confidence",
+                "reasoning",
+            ],
         },
-        "required": [
-            "primary_category",
-            "secondary_categories",
-            "classification_confidence",
-            "reasoning",
-        ],
     },
 }

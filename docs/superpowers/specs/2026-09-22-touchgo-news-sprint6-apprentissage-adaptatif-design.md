@@ -44,9 +44,21 @@ Classification :
 
 Scoring :
   TRES_INTERESSANT (🔥) / INTERESSANT (👍)   → priorité du modèle probablement sous-évaluée
-  REJETER (❌), toute raison                 → priorité du modèle probablement surévaluée
+  REJETER (❌) avec une raison parlant du niveau de priorité (trop_mineur,
+  pas_pertinent_touchgo, trop_commercial, trop_local, signal_trop_faible)
+                                             → priorité du modèle probablement surévaluée
   A_SUIVRE (👀)                              → exclu, signal trop neutre
 ```
+
+**Révision post-implémentation (2026-09-23) :** la version initiale de ce document utilisait
+« REJETER, toute raison » pour le signal de surévaluation. Revue à l'usage : sur les neuf raisons
+de rejet (section 17 du spec), `doublon`, `information_douteuse` et `autre` ne disent rien sur le
+niveau de priorité — un doublon peut être parfaitement bien noté, c'est juste déjà vu ailleurs.
+Les inclure aurait rendu le signal majoritairement bruité si `doublon` s'avère une raison de rejet
+fréquente en pratique. Restreint aux cinq raisons qui parlent effectivement du niveau
+(`trop_mineur`, `pas_pertinent_touchgo`, `trop_commercial`, `trop_local`, `signal_trop_faible`) —
+`doublon`/`information_douteuse`/`autre` restent des feedbacks valides, simplement non exploités
+par le mécanisme de scoring adaptatif.
 
 Une même ligne `REJETER`/`hors_perimetre` peut alimenter les deux jeux d'exemples simultanément
 (classification ET scoring) — les deux requêtes sont indépendantes sur la même table, ce n'est pas

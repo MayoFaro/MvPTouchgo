@@ -166,7 +166,7 @@ def test_build_scoring_examples_formats_interessant_as_underestimated(db_session
 
 def test_build_scoring_examples_formats_rejection_as_overestimated(db_session, make_source):
     item = _item(db_session, make_source)
-    _feedback(db_session, item, decision="REJETER", reason="doublon", previous_priority="A")
+    _feedback(db_session, item, decision="REJETER", reason="trop_mineur", previous_priority="A")
 
     result = build_scoring_examples(db_session, min_examples=1, max_examples=5)
 
@@ -174,6 +174,38 @@ def test_build_scoring_examples_formats_rejection_as_overestimated(db_session, m
         "- Item priorité A donnée par le modèle ; retour humain : "
         "❌ rejeté (probablement surévalué)."
     )
+
+
+def test_build_scoring_examples_formats_every_priority_relevant_reject_reason_as_overestimated(
+    db_session, make_source
+):
+    item = _item(db_session, make_source)
+    for reason in [
+        "trop_mineur",
+        "pas_pertinent_touchgo",
+        "trop_commercial",
+        "trop_local",
+        "signal_trop_faible",
+    ]:
+        _feedback(
+            db_session, item, decision="REJETER", reason=reason, previous_priority="A"
+        )
+
+    result = build_scoring_examples(db_session, min_examples=1, max_examples=5)
+
+    assert len(result.splitlines()) == 5
+
+
+def test_build_scoring_examples_ignores_rejections_with_non_priority_reasons(
+    db_session, make_source
+):
+    item = _item(db_session, make_source)
+    for reason in ["doublon", "information_douteuse", "autre"]:
+        _feedback(db_session, item, decision="REJETER", reason=reason, previous_priority="A")
+
+    result = build_scoring_examples(db_session, min_examples=1, max_examples=5)
+
+    assert result == ""
 
 
 def test_build_scoring_examples_ignores_a_suivre(db_session, make_source):

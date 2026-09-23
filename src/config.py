@@ -8,7 +8,8 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://touchgo:touchgo@localhost:5432/touchgo_news"
     sources_config_path: str = "config/sources.yaml"
-    anthropic_api_key: str = ""
+    ollama_host: str = "http://localhost:11434"
+    ollama_model: str = "qwen2.5:7b-instruct"
     classification_batch_size: int = 20
     classification_interval_minutes: int = 3
     classification_max_attempts: int = 5

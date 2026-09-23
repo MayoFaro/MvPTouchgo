@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-import anthropic
+import ollama
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -48,7 +48,7 @@ async def score_pending_items(
         max_examples=settings.adaptive_max_examples,
     )
 
-    async with anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key) as client:
+    async with ollama.AsyncClient(host=settings.ollama_host) as client:
         for item, source_type in pending:
             try:
                 result = await score_item(

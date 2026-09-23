@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-import anthropic
+import ollama
 from pydantic import BaseModel
 
 from src.config import get_settings
@@ -9,7 +9,6 @@ from src.scoring.prompt import PRIORITIES, SCORE_TOOL, SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
-MODEL = "claude-haiku-4-5-20251001"
 MAX_ATTEMPTS = 2
 RETRY_DELAY_SECONDS = 1
 
@@ -28,28 +27,30 @@ class ScoringError(Exception):
 
 
 def parse_scoring_response(response) -> ScoringResult:
-    for block in response.content:
-        if getattr(block, "type", None) == "tool_use" and block.name == "score_news_item":
-            data = block.input
-            priority = data.get("priority")
-            if priority not in PRIORITIES:
-                raise ValueError(f"invalid priority from model: {priority!r}")
-            for key in ("touchgo_interest", "event_importance", "source_confidence", "urgency"):
-                if key not in data:
-                    raise ValueError(f"missing required field {key!r} in model response")
-                if not 0 <= int(data[key]) <= 10:
-                    raise ValueError(
-                        f"field {key!r} out of range (must be 0-10): {data[key]!r}"
-                    )
-            return ScoringResult(
-                touchgo_interest=int(data["touchgo_interest"]),
-                event_importance=int(data["event_importance"]),
-                source_confidence=int(data["source_confidence"]),
-                urgency=int(data["urgency"]),
-                priority=priority,
-                reasoning=str(data.get("reasoning", "")),
-            )
-    raise ValueError("no tool_use block named score_news_item in Claude response")
+    tool_calls = response.message.tool_calls
+    if tool_calls:
+        for tool_call in tool_calls:
+            if tool_call.function.name == "score_news_item":
+                data = tool_call.function.arguments
+                priority = data.get("priority")
+                if priority not in PRIORITIES:
+                    raise ValueError(f"invalid priority from model: {priority!r}")
+                for key in ("touchgo_interest", "event_importance", "source_confidence", "urgency"):
+                    if key not in data:
+                        raise ValueError(f"missing required field {key!r} in model response")
+                    if not 0 <= int(data[key]) <= 10:
+                        raise ValueError(
+                            f"field {key!r} out of range (must be 0-10): {data[key]!r}"
+                        )
+                return ScoringResult(
+                    touchgo_interest=int(data["touchgo_interest"]),
+                    event_importance=int(data["event_importance"]),
+                    source_confidence=int(data["source_confidence"]),
+                    urgency=int(data["urgency"]),
+                    priority=priority,
+                    reasoning=str(data.get("reasoning", "")),
+                )
+    raise ValueError("no tool call named score_news_item in Ollama response")
 
 
 async def score_item(
@@ -57,9 +58,9 @@ async def score_item(
     text: str,
     source_type: str,
     examples: str = "",
-    client: anthropic.AsyncAnthropic | None = None,
+    client: ollama.AsyncClient | None = None,
 ) -> ScoringResult:
-    active_client = client or anthropic.AsyncAnthropic(api_key=get_settings().anthropic_api_key)
+    active_client = client or ollama.AsyncClient(host=get_settings().ollama_host)
     # Bound the article body sent to the model: caps token cost and avoids risking
     # the context window on an arbitrarily long scraped article.
     truncated_text = text[:4000]
@@ -77,13 +78,13 @@ async def score_item(
     last_error: Exception | None = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            response = await active_client.messages.create(
-                model=MODEL,
-                max_tokens=512,
-                system=SYSTEM_PROMPT,
+            response = await active_client.chat(
+                model=get_settings().ollama_model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_message},
+                ],
                 tools=[SCORE_TOOL],
-                tool_choice={"type": "tool", "name": "score_news_item"},
-                messages=[{"role": "user", "content": user_message}],
             )
             return parse_scoring_response(response)
         except Exception as exc:  # noqa: BLE001 - any failure takes the same retry/backoff path

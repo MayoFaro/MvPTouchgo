@@ -20,8 +20,8 @@ def test_system_prompt_mentions_the_feedback_examples_marker():
 
 
 def test_score_tool_schema_has_required_fields():
-    assert SCORE_TOOL["name"] == "score_news_item"
-    properties = SCORE_TOOL["input_schema"]["properties"]
+    assert SCORE_TOOL["function"]["name"] == "score_news_item"
+    properties = SCORE_TOOL["function"]["parameters"]["properties"]
     assert set(properties) == {
         "touchgo_interest",
         "event_importance",
@@ -32,9 +32,8 @@ def test_score_tool_schema_has_required_fields():
     }
     assert properties["priority"]["enum"] == PRIORITIES
     for dimension in ["touchgo_interest", "event_importance", "source_confidence", "urgency"]:
-        assert properties[dimension]["minimum"] == 0
-        assert properties[dimension]["maximum"] == 10
-    required = SCORE_TOOL["input_schema"]["required"]
+        assert "0 to 10" in properties[dimension]["description"]
+    required = SCORE_TOOL["function"]["parameters"]["required"]
     assert set(required) == {
         "touchgo_interest",
         "event_importance",

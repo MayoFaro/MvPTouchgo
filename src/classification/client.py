@@ -34,11 +34,20 @@ def parse_classification_response(response) -> ClassificationResult:
                 primary = data.get("primary_category")
                 if primary not in CATEGORIES:
                     raise ValueError(f"invalid primary_category from model: {primary!r}")
+                if "classification_confidence" not in data:
+                    raise ValueError(
+                        "missing required field 'classification_confidence' in model response"
+                    )
+                confidence = float(data["classification_confidence"])
+                if not 0.0 <= confidence <= 1.0:
+                    raise ValueError(
+                        f"classification_confidence out of range (must be 0.0-1.0): {confidence!r}"
+                    )
                 secondary = [c for c in data.get("secondary_categories", []) if c in CATEGORIES]
                 return ClassificationResult(
                     primary_category=primary,
                     secondary_categories=secondary,
-                    classification_confidence=float(data.get("classification_confidence", 0.0)),
+                    classification_confidence=confidence,
                     reasoning=str(data.get("reasoning", "")),
                 )
     raise ValueError("no tool call named classify_news_item in Ollama response")
@@ -50,7 +59,9 @@ async def classify_item(
     examples: str = "",
     client: ollama.AsyncClient | None = None,
 ) -> ClassificationResult:
-    active_client = client or ollama.AsyncClient(host=get_settings().ollama_host)
+    active_client = client or ollama.AsyncClient(
+        host=get_settings().ollama_host, timeout=get_settings().ollama_timeout_seconds
+    )
     # Bound the article body sent to the model: caps token cost and avoids risking
     # the context window on an arbitrarily long scraped article.
     truncated_text = text[:4000]

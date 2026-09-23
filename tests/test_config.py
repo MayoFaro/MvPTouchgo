@@ -8,6 +8,7 @@ def test_settings_read_from_env(monkeypatch):
     monkeypatch.setenv("SOURCES_CONFIG_PATH", "config/sources.yaml")
     monkeypatch.setenv("OLLAMA_HOST", "http://ollama-test:11434")
     monkeypatch.setenv("OLLAMA_MODEL", "test-model")
+    monkeypatch.setenv("OLLAMA_TIMEOUT_SECONDS", "30.0")
     monkeypatch.setenv("CLASSIFICATION_BATCH_SIZE", "5")
     monkeypatch.setenv("CLASSIFICATION_INTERVAL_MINUTES", "10")
     monkeypatch.setenv("CLASSIFICATION_MAX_ATTEMPTS", "3")
@@ -22,6 +23,7 @@ def test_settings_read_from_env(monkeypatch):
     assert settings.sources_config_path == "config/sources.yaml"
     assert settings.ollama_host == "http://ollama-test:11434"
     assert settings.ollama_model == "test-model"
+    assert settings.ollama_timeout_seconds == 30.0
     assert settings.classification_batch_size == 5
     assert settings.classification_interval_minutes == 10
     assert settings.classification_max_attempts == 3
@@ -38,6 +40,7 @@ def test_settings_have_defaults(monkeypatch):
     monkeypatch.delenv("SOURCES_CONFIG_PATH", raising=False)
     monkeypatch.delenv("OLLAMA_HOST", raising=False)
     monkeypatch.delenv("OLLAMA_MODEL", raising=False)
+    monkeypatch.delenv("OLLAMA_TIMEOUT_SECONDS", raising=False)
     monkeypatch.delenv("CLASSIFICATION_BATCH_SIZE", raising=False)
     monkeypatch.delenv("CLASSIFICATION_INTERVAL_MINUTES", raising=False)
     monkeypatch.delenv("CLASSIFICATION_MAX_ATTEMPTS", raising=False)
@@ -52,6 +55,7 @@ def test_settings_have_defaults(monkeypatch):
     assert settings.sources_config_path == "config/sources.yaml"
     assert settings.ollama_host == "http://localhost:11434"
     assert settings.ollama_model == "qwen2.5:7b-instruct"
+    assert settings.ollama_timeout_seconds == 120.0
     assert settings.classification_batch_size == 20
     assert settings.classification_interval_minutes == 3
     assert settings.classification_max_attempts == 5

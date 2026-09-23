@@ -50,7 +50,9 @@ async def classify_pending_items(
         max_examples=settings.adaptive_max_examples,
     )
 
-    async with ollama.AsyncClient(host=settings.ollama_host) as client:
+    async with ollama.AsyncClient(
+        host=settings.ollama_host, timeout=settings.ollama_timeout_seconds
+    ) as client:
         for item in pending:
             try:
                 result = await classify_item(

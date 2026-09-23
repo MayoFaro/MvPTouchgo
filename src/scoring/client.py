@@ -60,7 +60,9 @@ async def score_item(
     examples: str = "",
     client: ollama.AsyncClient | None = None,
 ) -> ScoringResult:
-    active_client = client or ollama.AsyncClient(host=get_settings().ollama_host)
+    active_client = client or ollama.AsyncClient(
+        host=get_settings().ollama_host, timeout=get_settings().ollama_timeout_seconds
+    )
     # Bound the article body sent to the model: caps token cost and avoids risking
     # the context window on an arbitrarily long scraped article.
     truncated_text = text[:4000]

@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     sources_config_path: str = "config/sources.yaml"
     ollama_host: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:7b-instruct"
+    ollama_timeout_seconds: float = 120.0
     classification_batch_size: int = 20
     classification_interval_minutes: int = 3
     classification_max_attempts: int = 5

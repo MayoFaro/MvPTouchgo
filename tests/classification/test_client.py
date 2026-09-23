@@ -88,6 +88,83 @@ def test_parse_classification_response_rejects_invalid_category():
         parse_classification_response(response)
 
 
+def test_parse_classification_response_rejects_missing_confidence():
+    response = ollama.ChatResponse(
+        model="test-model",
+        message=ollama.Message(
+            role="assistant",
+            tool_calls=[
+                ollama.Message.ToolCall(
+                    function=ollama.Message.ToolCall.Function(
+                        name="classify_news_item",
+                        arguments={
+                            "primary_category": "MILITAIRE",
+                            "secondary_categories": [],
+                            "reasoning": "test",
+                        },
+                    )
+                )
+            ],
+        ),
+        done=True,
+    )
+
+    with pytest.raises(ValueError):
+        parse_classification_response(response)
+
+
+def test_parse_classification_response_rejects_out_of_range_confidence():
+    response = ollama.ChatResponse(
+        model="test-model",
+        message=ollama.Message(
+            role="assistant",
+            tool_calls=[
+                ollama.Message.ToolCall(
+                    function=ollama.Message.ToolCall.Function(
+                        name="classify_news_item",
+                        arguments={
+                            "primary_category": "MILITAIRE",
+                            "secondary_categories": [],
+                            "classification_confidence": 85.0,
+                            "reasoning": "test",
+                        },
+                    )
+                )
+            ],
+        ),
+        done=True,
+    )
+
+    with pytest.raises(ValueError):
+        parse_classification_response(response)
+
+
+def test_parse_classification_response_rejects_negative_confidence():
+    response = ollama.ChatResponse(
+        model="test-model",
+        message=ollama.Message(
+            role="assistant",
+            tool_calls=[
+                ollama.Message.ToolCall(
+                    function=ollama.Message.ToolCall.Function(
+                        name="classify_news_item",
+                        arguments={
+                            "primary_category": "MILITAIRE",
+                            "secondary_categories": [],
+                            "classification_confidence": -3.0,
+                            "reasoning": "test",
+                        },
+                    )
+                )
+            ],
+        ),
+        done=True,
+    )
+
+    with pytest.raises(ValueError):
+        parse_classification_response(response)
+
+
 def test_parse_classification_response_raises_when_no_tool_call():
     response = ollama.ChatResponse(
         model="test-model",

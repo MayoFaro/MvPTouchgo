@@ -52,3 +52,48 @@ sources:
     source_type: community
     poll_interval_minutes: 60
     active: true
+
+  - id: air_cosmos
+    name: "Air & Cosmos"
+    type: rss
+    url: https://air-cosmos.latribune.fr/rss
+    language: fr
+    source_type: press
+    poll_interval_minutes: 30
+    active: true
+
+  - id: aeronet_militaire
+    name: "Aeronet - Pilote militaire (Discussions générales)"
+    type: forum_aeronet
+    url: https://forum.aeronet-fr.org/viewforum.php?f=32
+    language: fr
+    source_type: community
+    poll_interval_minutes: 60
+    active: true
+
+  - id: aeronet_ligne
+    name: "Aeronet - Pilote de Ligne Europe (Discussions générales)"
+    type: forum_aeronet
+    url: https://forum.aeronet-fr.org/viewforum.php?f=5
+    language: fr
+    source_type: community
+    poll_interval_minutes: 60
+    active: true
+
+  - id: aeronet_emplois
+    name: "Aeronet - Emplois & Sélections compagnies"
+    type: forum_aeronet
+    url: https://forum.aeronet-fr.org/viewforum.php?f=58
+    language: fr
+    source_type: community
+    poll_interval_minutes: 60
+    active: true
+
+  - id: bea_transport_commercial
+    name: "BEA - Rapports Transport Commercial"
+    type: bea_search
+    url: https://bea.aero/enquetes-de-securite/rapports-bea-transport-commercial/
+    language: fr
+    source_type: official
+    poll_interval_minutes: 60
+    active: true

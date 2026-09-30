@@ -2,7 +2,7 @@ sources:
   - id: flightglobal
     name: FlightGlobal
     type: rss
-    url: https://www.flightglobal.com/rss
+    url: https://www.flightglobal.com/feed/
     language: en
     source_type: press
     poll_interval_minutes: 30

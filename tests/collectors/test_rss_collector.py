@@ -100,3 +100,19 @@ async def test_rss_collector_raises_on_http_error():
 
     with pytest.raises(httpx.HTTPStatusError):
         await collector.fetch()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_rss_collector_follows_redirects():
+    respx.get("https://example.com/old-feed").mock(
+        return_value=httpx.Response(301, headers={"location": "https://example.com/feed"})
+    )
+    respx.get("https://example.com/feed").mock(
+        return_value=httpx.Response(200, text=FIXTURE, headers={"content-type": "application/rss+xml"})
+    )
+    collector = RSSCollector(source_id="example", feed_url="https://example.com/old-feed")
+
+    items = await collector.fetch()
+
+    assert len(items) == 2

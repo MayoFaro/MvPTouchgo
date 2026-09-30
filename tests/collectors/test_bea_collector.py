@@ -38,3 +38,18 @@ async def test_fetch_uses_parse_search_results():
     items = await collector.fetch()
 
     assert len(items) == 3
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_fetch_follows_redirects():
+    redirected_url = "https://bea.aero/les-enquetes/evenements-notifies/?isFilter=1&cHash=abc"
+    respx.get(LISTING_URL).mock(
+        return_value=httpx.Response(303, headers={"location": redirected_url})
+    )
+    respx.get(redirected_url).mock(return_value=httpx.Response(200, text=FIXTURE))
+    collector = BEACollector(source_id="bea_transport_commercial", listing_url=LISTING_URL)
+
+    items = await collector.fetch()
+
+    assert len(items) == 3

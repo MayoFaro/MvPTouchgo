@@ -47,7 +47,7 @@ class RSSCollector(Collector):
         if self._http_client is not None:
             response = await self._http_client.get(self.feed_url, headers=_HEADERS)
         else:
-            async with httpx.AsyncClient(timeout=15) as client:
+            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
                 response = await client.get(self.feed_url, headers=_HEADERS)
         response.raise_for_status()
         return response.text

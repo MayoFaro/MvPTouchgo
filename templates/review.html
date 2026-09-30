@@ -72,6 +72,14 @@
     {% endfor %}
   </div>
 
+  <div id="reason-panel" class="reason-panel" hidden>
+    <div class="reason-panel__box">
+      <p class="reason-panel__title">Raison du rejet</p>
+      <div class="reason-panel__options"></div>
+      <button type="button" class="reason-panel__cancel">Annuler</button>
+    </div>
+  </div>
+
   <script>
     window.REJECT_REASONS = {{ reject_reasons | tojson }};
   </script>

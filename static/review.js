@@ -1,3 +1,58 @@
+const REASON_LABELS = {
+  trop_mineur: "Trop mineur",
+  pas_pertinent_touchgo: "Pas pertinent pour Touch-Go",
+  trop_commercial: "Trop commercial",
+  trop_local: "Trop local",
+  signal_trop_faible: "Signal trop faible",
+  doublon: "Doublon",
+  information_douteuse: "Information douteuse",
+  hors_perimetre: "Hors périmètre",
+  autre: "Autre",
+};
+
+const reasonPanel = document.getElementById("reason-panel");
+const reasonOptions = reasonPanel.querySelector(".reason-panel__options");
+const reasonCancel = reasonPanel.querySelector(".reason-panel__cancel");
+let pendingReasonChoice = null;
+
+(window.REJECT_REASONS || []).forEach((code) => {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.dataset.reason = code;
+  button.textContent = REASON_LABELS[code] || code;
+  reasonOptions.appendChild(button);
+});
+
+reasonOptions.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-reason]");
+  if (!button || !pendingReasonChoice) return;
+  closeReasonPanel(button.dataset.reason);
+});
+
+reasonCancel.addEventListener("click", closeReasonPanel);
+reasonPanel.addEventListener("click", (event) => {
+  if (event.target === reasonPanel) closeReasonPanel();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !reasonPanel.hidden) closeReasonPanel();
+});
+
+function openReasonPanel() {
+  return new Promise((resolve) => {
+    pendingReasonChoice = resolve;
+    reasonPanel.hidden = false;
+  });
+}
+
+function closeReasonPanel(result = null) {
+  reasonPanel.hidden = true;
+  if (pendingReasonChoice) {
+    const resolve = pendingReasonChoice;
+    pendingReasonChoice = null;
+    resolve(result);
+  }
+}
+
 document.addEventListener("click", async (event) => {
   const button = event.target.closest("button[data-decision]");
   if (!button) return;
@@ -10,8 +65,8 @@ document.addEventListener("click", async (event) => {
   let comment = null;
 
   if (button.dataset.needsReason) {
-    reason = window.prompt("Raison du rejet :\n" + window.REJECT_REASONS.join(", "));
-    if (!reason || !window.REJECT_REASONS.includes(reason)) {
+    reason = await openReasonPanel();
+    if (!reason) {
       showError(card, "Raison invalide ou annulée.");
       return;
     }

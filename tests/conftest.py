@@ -7,6 +7,7 @@ import pytest
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
+from src.config import get_settings
 from src.db.base import Base
 from src.db.models import NewsSource  # noqa: F401 ensures metadata is populated
 
@@ -72,6 +73,19 @@ def db_session(engine):
     session.close()
     transaction.rollback()
     connection.close()
+
+
+@pytest.fixture(autouse=True)
+def _unlimited_item_age(monkeypatch):
+    """Most fixtures carry fixed calendar dates that drift stale over time.
+
+    Tests that specifically exercise the freshness filter (see
+    tests/collectors/test_runner.py) override MAX_ITEM_AGE_DAYS themselves.
+    """
+    monkeypatch.setenv("MAX_ITEM_AGE_DAYS", "36500")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.fixture()

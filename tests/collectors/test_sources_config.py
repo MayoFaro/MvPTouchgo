@@ -22,7 +22,7 @@ def test_load_sources_config_parses_fixture():
     ]
 
 
-def test_real_sources_config_is_valid_and_has_eleven_active_sources():
+def test_real_sources_config_is_valid_and_has_twelve_active_sources():
     sources = load_sources_config(REAL_CONFIG)
     active_ids = {s.id for s in sources if s.active}
     assert active_ids == {
@@ -37,4 +37,5 @@ def test_real_sources_config_is_valid_and_has_eleven_active_sources():
         "aeronet_ligne",
         "aeronet_emplois",
         "bea_transport_commercial",
+        "airshowdisplay",
     }

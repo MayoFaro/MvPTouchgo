@@ -97,3 +97,12 @@ sources:
     source_type: official
     poll_interval_minutes: 60
     active: true
+
+  - id: airshowdisplay
+    name: "Airshow Display"
+    type: rss
+    url: https://airshowdisplay.fr/fluxrss
+    language: fr
+    source_type: media
+    poll_interval_minutes: 60
+    active: true

@@ -14,6 +14,7 @@ nav.views a, form.filters select { margin-right: 0.5rem; }
 .feedback-error { color: #b00020; font-size: 0.85rem; margin-top: 0.5rem; }
 .page-error { color: #b00020; font-weight: bold; margin: 1rem 0; }
 
+.reason-panel[hidden] { display: none; }
 .reason-panel { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); display: flex; align-items: center; justify-content: center; z-index: 10; }
 .reason-panel__box { background: #fff; border-radius: 8px; padding: 1.25rem; max-width: 320px; width: 90%; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2); }
 .reason-panel__title { font-weight: bold; margin: 0 0 0.75rem; }

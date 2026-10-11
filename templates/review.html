@@ -47,7 +47,7 @@
       <div class="badges">
         <span class="badge priority-{{ item.priority }}">{{ item.priority or "—" }}</span>
         <span class="badge category">{{ item.primary_category or "—" }}</span>
-        <span class="time">{{ item.detected_at | relative_time }}</span>
+        <span class="time">{{ (item.published_at or item.detected_at) | relative_time }}</span>
       </div>
       <h2><a href="{{ item.original_url }}" target="_blank" rel="noopener">{{ item.original_title }}</a></h2>
       <p class="source">Source : {{ item.source_id }} — Langue : {{ item.language or "?" }}</p>

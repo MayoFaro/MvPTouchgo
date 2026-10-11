@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.api.schemas import NewsItemOut
@@ -95,14 +95,17 @@ def _filtered_items(
 
     effective_priority = priority or _VIEW_TO_PRIORITY.get(view)
 
-    query = select(NewsItem).order_by(NewsItem.detected_at.desc())
+    # A late collection must never make a years-old publication appear fresh.
+    effective_date = func.coalesce(NewsItem.published_at, NewsItem.detected_at)
+    freshness_cutoff = datetime.now(timezone.utc) - timedelta(days=get_settings().max_item_age_days)
+    query = select(NewsItem).where(effective_date >= freshness_cutoff).order_by(effective_date.desc())
     if effective_priority is not None:
         query = query.where(NewsItem.priority == effective_priority)
     if category is not None:
         query = query.where(NewsItem.primary_category == category)
     if since is not None:
         cutoff = datetime.now(timezone.utc) - _SINCE_TO_DELTA[since]
-        query = query.where(NewsItem.detected_at >= cutoff)
+        query = query.where(effective_date >= cutoff)
 
     return list(session.execute(query).scalars())
 

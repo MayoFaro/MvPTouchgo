@@ -106,3 +106,39 @@ sources:
     source_type: media
     poll_interval_minutes: 60
     active: true
+
+  - id: fob
+    name: "FOB - Forces Operations Blog"
+    type: rss
+    url: https://forcesoperations.com/feed/
+    language: fr
+    source_type: press
+    poll_interval_minutes: 30
+    active: true
+
+  - id: naval_news
+    name: "Naval News"
+    type: rss
+    url: https://www.navalnews.com/feed/
+    language: en
+    source_type: press
+    poll_interval_minutes: 30
+    active: true
+
+  - id: portail_ie_defense
+    name: "Portail de l'IE - Défense"
+    type: rss
+    url: https://www.portail-ie.fr/feed/
+    language: fr
+    source_type: press
+    poll_interval_minutes: 60
+    active: true
+
+  - id: meta_defense
+    name: "Meta-Defense"
+    type: wordpress_api
+    url: https://meta-defense.fr/wp-json/wp/v2/posts?per_page=25&_fields=id,date,date_gmt,link,title,excerpt,content
+    language: fr
+    source_type: press
+    poll_interval_minutes: 30
+    active: true

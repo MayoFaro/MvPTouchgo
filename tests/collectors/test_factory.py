@@ -4,6 +4,7 @@ from src.collectors.factory import build_collector
 from src.collectors.forum_pprune import PPRuneForumCollector
 from src.collectors.rss import RSSCollector
 from src.collectors.sources_config import SourceConfig
+from src.collectors.wordpress import WordPressApiCollector
 
 
 def _config(**overrides) -> SourceConfig:
@@ -36,6 +37,13 @@ def test_build_collector_forum_pprune():
     collector = build_collector(_config(type="forum_pprune"))
     assert isinstance(collector, PPRuneForumCollector)
     assert collector.listing_url == "https://example.com/feed"
+
+
+def test_build_collector_wordpress_api():
+    collector = build_collector(_config(type="wordpress_api", language="fr"))
+    assert isinstance(collector, WordPressApiCollector)
+    assert collector.api_url == "https://example.com/feed"
+    assert collector.default_language == "fr"
 
 
 def test_build_collector_unknown_type_raises():
